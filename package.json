@@ -12,6 +12,8 @@
   ],
   "scripts": {
     "dev": "npm -w packages/db run build && npm -w apps/api run dev",
+    "dev:web": "npm -w apps/web run dev",
+    "dev:all": "npm -w packages/db run build && npm -w apps/api run dev & npm -w apps/web run dev",
     "db:up": "docker compose -f infra/docker-compose.yml up -d",
     "db:down": "docker compose -f infra/docker-compose.yml down --remove-orphans",
     "db:reset": "docker rm -f tably-postgres || true && docker compose -f infra/docker-compose.yml down -v --remove-orphans && docker compose -f infra/docker-compose.yml up -d",

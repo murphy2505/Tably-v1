@@ -22,6 +22,9 @@ npm run db:seed
 
 # 6) Start API (port 4002)
 npm run dev
+
+# 7) Start Web (port 5173)
+npm run dev:web
 ```
 
 Copy `.env.example` to `.env` and adjust if needed. Step 1 is single-tenant via `DEFAULT_TENANT_ID`.
@@ -92,6 +95,15 @@ curl -s -X POST http://localhost:4002/core/catalog/revenue-groups \
 ```
 
 ## POS Contract (active-pos-menu DTO)
+## Web
+- URL: http://localhost:5173
+- The web app fetches `/core/menu/active-pos-menu` and renders a grid of tiles.
+- Configure API base via `VITE_API_URL` (defaults to `http://localhost:4002`).
+
+Quick API check used by web:
+```bash
+curl -s http://localhost:4002/core/menu/active-pos-menu | jq
+```
 The `/core/menu/active-pos-menu` endpoint returns a minimal DTO for POS:
 
 ```json
