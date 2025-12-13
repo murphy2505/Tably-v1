@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
 import { getTenantIdFromRequest } from "../../tenant";
 import { notFound } from "../../lib/http";
+import { mapActivePosMenu } from "./posDto";
 
 export async function listMenus(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
@@ -167,5 +168,5 @@ export async function getActivePosMenu(req: Request, res: Response) {
       course: true
     }
   });
-  res.json({ data: { menu, items } });
+  res.json({ data: mapActivePosMenu(menu, items) });
 }

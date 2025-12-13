@@ -90,3 +90,29 @@ curl -s -X POST http://localhost:4002/core/catalog/revenue-groups \
   -H 'x-tenant-id: test-tenant' \
   -d '{"name":"Test RG","sortOrder":1,"isActive":true}' | jq
 ```
+
+## POS Contract (active-pos-menu DTO)
+The `/core/menu/active-pos-menu` endpoint returns a minimal DTO for POS:
+
+```json
+{
+  "data": {
+    "id": "...",
+    "name": "Kassa basis",
+    "slug": "kassa-basis",
+    "channel": "BOTH",
+    "layoutType": "GRID",
+    "columns": 4,
+    "items": [
+      {
+        "id": "...",
+        "sortOrder": 1,
+        "priceCents": 250,
+        "product": { "id": "...", "name": "Friet", "description": "Heerlijke friet", "imageUrl": null, "vatRateBps": 900, "allergenTags": null },
+        "variant": { "id": "...", "name": "Klein" },
+        "course": { "id": "...", "name": "Snacks", "shortLabel": "Snacks" }
+      }
+    ]
+  }
+}
+```
