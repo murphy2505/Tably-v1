@@ -18,6 +18,10 @@ export function notFound(res: Response) {
   return res.status(404).json({ error: { message: "NOT_FOUND" } });
 }
 
+export function serviceUnavailable(res: Response) {
+  return res.status(503).json({ error: { message: "NOT_READY" } });
+}
+
 export function errorMiddleware(err: any, _req: Request, res: Response, _next: NextFunction) {
   console.error(err);
   internalServerError(res);

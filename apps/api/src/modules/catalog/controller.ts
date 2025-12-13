@@ -3,9 +3,17 @@ import { prisma } from "../../lib/prisma";
 import { getTenantId } from "../../tenant";
 import { notFound } from "../../lib/http";
 
-export async function listRevenueGroups(_req: Request, res: Response) {
+export async function listRevenueGroups(req: Request, res: Response) {
   const tenantId = getTenantId();
-  const data = await prisma.revenueGroup.findMany({ where: { tenantId }, orderBy: { sortOrder: "asc" } });
+  const isActiveQ = req.query.isActive as string | undefined;
+  const orderByQ = req.query.orderBy as string | undefined;
+  const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
+  const where: any = { tenantId };
+  if (isActiveQ === "true") where.isActive = true;
+  if (isActiveQ === "false") where.isActive = false;
+  const allowed = ["sortOrder", "name"];
+  const field = allowed.includes(orderByQ || "") ? (orderByQ as string) : "sortOrder";
+  const data = await prisma.revenueGroup.findMany({ where, orderBy: { [field]: orderQ } as any });
   res.json({ data });
 }
 export async function createRevenueGroup(req: Request, res: Response) {
@@ -30,9 +38,17 @@ export async function deleteRevenueGroup(req: Request, res: Response) {
   res.json({ data: rg });
 }
 
-export async function listProductGroups(_req: Request, res: Response) {
+export async function listProductGroups(req: Request, res: Response) {
   const tenantId = getTenantId();
-  const data = await prisma.productGroup.findMany({ where: { tenantId }, orderBy: { sortOrder: "asc" } });
+  const isActiveQ = req.query.isActive as string | undefined;
+  const orderByQ = req.query.orderBy as string | undefined;
+  const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
+  const where: any = { tenantId };
+  if (isActiveQ === "true") where.isActive = true;
+  if (isActiveQ === "false") where.isActive = false;
+  const allowed = ["sortOrder", "name"];
+  const field = allowed.includes(orderByQ || "") ? (orderByQ as string) : "sortOrder";
+  const data = await prisma.productGroup.findMany({ where, orderBy: { [field]: orderQ } as any });
   res.json({ data });
 }
 export async function createProductGroup(req: Request, res: Response) {
@@ -57,9 +73,17 @@ export async function deleteProductGroup(req: Request, res: Response) {
   res.json({ data: pg });
 }
 
-export async function listCategories(_req: Request, res: Response) {
+export async function listCategories(req: Request, res: Response) {
   const tenantId = getTenantId();
-  const data = await prisma.category.findMany({ where: { tenantId }, orderBy: { sortOrder: "asc" } });
+  const isActiveQ = req.query.isActive as string | undefined;
+  const orderByQ = req.query.orderBy as string | undefined;
+  const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
+  const where: any = { tenantId };
+  if (isActiveQ === "true") where.isActive = true;
+  if (isActiveQ === "false") where.isActive = false;
+  const allowed = ["sortOrder", "name"];
+  const field = allowed.includes(orderByQ || "") ? (orderByQ as string) : "sortOrder";
+  const data = await prisma.category.findMany({ where, orderBy: { [field]: orderQ } as any });
   res.json({ data });
 }
 export async function createCategory(req: Request, res: Response) {
@@ -84,9 +108,17 @@ export async function deleteCategory(req: Request, res: Response) {
   res.json({ data: cat });
 }
 
-export async function listProducts(_req: Request, res: Response) {
+export async function listProducts(req: Request, res: Response) {
   const tenantId = getTenantId();
-  const data = await prisma.product.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } });
+  const isActiveQ = req.query.isActive as string | undefined;
+  const orderByQ = req.query.orderBy as string | undefined;
+  const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
+  const where: any = { tenantId };
+  if (isActiveQ === "true") where.isActive = true;
+  if (isActiveQ === "false") where.isActive = false;
+  const allowed = ["name", "createdAt"];
+  const field = allowed.includes(orderByQ || "") ? (orderByQ as string) : "createdAt";
+  const data = await prisma.product.findMany({ where, orderBy: { [field]: orderQ } as any });
   res.json({ data });
 }
 export async function getProduct(req: Request, res: Response) {
@@ -147,9 +179,16 @@ export async function deleteProduct(req: Request, res: Response) {
 export async function listVariants(req: Request, res: Response) {
   const tenantId = getTenantId();
   const productId = req.query.productId as string | undefined;
+  const isActiveQ = req.query.isActive as string | undefined;
+  const orderByQ = req.query.orderBy as string | undefined;
+  const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
   const where: any = { tenantId };
   if (productId) where.productId = productId;
-  const data = await prisma.productVariant.findMany({ where, orderBy: { sortOrder: "asc" } });
+  if (isActiveQ === "true") where.isActive = true;
+  if (isActiveQ === "false") where.isActive = false;
+  const allowed = ["sortOrder", "name"];
+  const field = allowed.includes(orderByQ || "") ? (orderByQ as string) : "sortOrder";
+  const data = await prisma.productVariant.findMany({ where, orderBy: { [field]: orderQ } as any });
   res.json({ data });
 }
 export async function createVariant(req: Request, res: Response) {

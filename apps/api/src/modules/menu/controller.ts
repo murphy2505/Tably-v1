@@ -3,9 +3,17 @@ import { prisma } from "../../lib/prisma";
 import { getTenantId } from "../../tenant";
 import { notFound } from "../../lib/http";
 
-export async function listMenus(_req: Request, res: Response) {
+export async function listMenus(req: Request, res: Response) {
   const tenantId = getTenantId();
-  const data = await prisma.menu.findMany({ where: { tenantId }, orderBy: { sortOrder: "asc" } });
+  const isActiveQ = req.query.isActive as string | undefined;
+  const orderByQ = req.query.orderBy as string | undefined;
+  const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
+  const where: any = { tenantId };
+  if (isActiveQ === "true") where.isActive = true;
+  if (isActiveQ === "false") where.isActive = false;
+  const allowed = ["sortOrder", "name"];
+  const field = allowed.includes(orderByQ || "") ? (orderByQ as string) : "sortOrder";
+  const data = await prisma.menu.findMany({ where, orderBy: { [field]: orderQ } as any });
   res.json({ data });
 }
 export async function createMenu(req: Request, res: Response) {
@@ -52,9 +60,17 @@ export async function deleteMenu(req: Request, res: Response) {
   res.json({ data: m });
 }
 
-export async function listCourses(_req: Request, res: Response) {
+export async function listCourses(req: Request, res: Response) {
   const tenantId = getTenantId();
-  const data = await prisma.course.findMany({ where: { tenantId }, orderBy: { sortOrder: "asc" } });
+  const isActiveQ = req.query.isActive as string | undefined;
+  const orderByQ = req.query.orderBy as string | undefined;
+  const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
+  const where: any = { tenantId };
+  if (isActiveQ === "true") where.isActive = true;
+  if (isActiveQ === "false") where.isActive = false;
+  const allowed = ["sortOrder", "name"];
+  const field = allowed.includes(orderByQ || "") ? (orderByQ as string) : "sortOrder";
+  const data = await prisma.course.findMany({ where, orderBy: { [field]: orderQ } as any });
   res.json({ data });
 }
 export async function createCourse(req: Request, res: Response) {
@@ -82,9 +98,16 @@ export async function deleteCourse(req: Request, res: Response) {
 export async function listMenuItems(req: Request, res: Response) {
   const tenantId = getTenantId();
   const menuId = req.query.menuId as string | undefined;
+  const isActiveQ = req.query.isActive as string | undefined;
+  const orderByQ = req.query.orderBy as string | undefined;
+  const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
   const where: any = { tenantId };
   if (menuId) where.menuId = menuId;
-  const data = await prisma.menuItem.findMany({ where, orderBy: { sortOrder: "asc" } });
+  if (isActiveQ === "true") where.isActive = true;
+  if (isActiveQ === "false") where.isActive = false;
+  const allowed = ["sortOrder"];
+  const field = allowed.includes(orderByQ || "") ? (orderByQ as string) : "sortOrder";
+  const data = await prisma.menuItem.findMany({ where, orderBy: { [field]: orderQ } as any });
   res.json({ data });
 }
 export async function createMenuItem(req: Request, res: Response) {

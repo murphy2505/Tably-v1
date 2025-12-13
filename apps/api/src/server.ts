@@ -3,7 +3,8 @@ import cors from "cors";
 import { getTenantId } from "./tenant";
 import { catalogRouter } from "./modules/catalog/routes";
 import { menuRouter } from "./modules/menu/routes";
-import { errorMiddleware } from "./lib/http";
+import { errorMiddleware, serviceUnavailable } from "./lib/http";
+import { prisma } from "./lib/prisma";
 
 export function createServer() {
   const app = express();
@@ -11,6 +12,20 @@ export function createServer() {
   const origin = process.env.CORS_ORIGIN || "http://localhost:5173";
   app.use(cors({ origin, credentials: false }));
   app.use(express.json());
+
+  // Health endpoints (minimal)
+  app.get("/health", (_req, res) => {
+    res.json({ data: { ok: true, service: "api", time: new Date().toISOString() } });
+  });
+  app.get("/ready", async (_req, res) => {
+    try {
+      // Simple connectivity check via Prisma
+      await prisma.tenant.count({ take: 1 });
+      return res.json({ data: { ok: true } });
+    } catch (_e) {
+      return serviceUnavailable(res);
+    }
+  });
 
   app.use((req, _res, next) => {
     // Validate tenant existence early
