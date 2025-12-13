@@ -1,0 +1,22 @@
+{
+  "name": "tably-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tably v1 backbone monorepo",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm -w packages/db run build && npm -w apps/api run dev",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down --remove-orphans",
+    "db:reset": "docker rm -f tably-postgres || true && docker compose -f infra/docker-compose.yml down -v --remove-orphans && docker compose -f infra/docker-compose.yml up -d",
+    "prisma:generate": "npm --workspace packages/db run prisma:generate",
+    "db:migrate": "npm --workspace packages/db run prisma:migrate",
+    "db:seed": "npm --workspace packages/db run prisma:seed"
+  }
+}

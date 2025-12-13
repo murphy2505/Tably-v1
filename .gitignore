@@ -1,0 +1,15 @@
+# Node
+node_modules/
+*.log
+
+# Env
+.env
+
+# TypeScript build outputs
+/dist
+
+# Prisma
+packages/db/prisma/generated/
+
+# Docker
+postgres-data/

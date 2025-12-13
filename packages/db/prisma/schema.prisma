@@ -1,0 +1,152 @@
+// Prisma schema for Tably Step 1
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String         @id
+  name      String
+  createdAt DateTime       @default(now())
+  revenueGroups RevenueGroup[]
+  productGroups ProductGroup[]
+  categories Category[]
+  products  Product[]
+  variants  ProductVariant[]
+  menus     Menu[]
+  courses   Course[]
+  menuItems MenuItem[]
+}
+
+model RevenueGroup {
+  id         String       @id @default(cuid())
+  tenantId   String
+  name       String
+  sortOrder  Int          @default(0)
+  isActive   Boolean      @default(true)
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productGroups ProductGroup[]
+
+  @@index([tenantId, sortOrder])
+}
+
+model ProductGroup {
+  id           String    @id @default(cuid())
+  tenantId     String
+  name         String
+  revenueGroupId String
+  sortOrder    Int       @default(0)
+  isActive     Boolean   @default(true)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  revenueGroup RevenueGroup @relation(fields: [revenueGroupId], references: [id], onDelete: Restrict)
+  products     Product[]
+
+  @@index([tenantId, revenueGroupId])
+}
+
+model Category {
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  sortOrder  Int       @default(0)
+  isActive   Boolean   @default(true)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products   Product[]
+
+  @@index([tenantId, sortOrder])
+}
+
+model Product {
+  id               String   @id @default(cuid())
+  tenantId         String
+  productGroupId   String
+  categoryId       String?
+  name             String
+  description      String?
+  basePriceCents   Int
+  vatRateBps       Int
+  imageUrl         String?
+  allergenTags     Json?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productGroup     ProductGroup @relation(fields: [productGroupId], references: [id], onDelete: Restrict)
+  category         Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  variants         ProductVariant[]
+  menuItems        MenuItem[]
+
+  @@index([tenantId, productGroupId])
+  @@index([tenantId, categoryId])
+}
+
+model ProductVariant {
+  id               String   @id @default(cuid())
+  tenantId         String
+  productId        String
+  name             String
+  priceOverrideCents Int?
+  sortOrder        Int      @default(0)
+  isActive         Boolean  @default(true)
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  menuItems        MenuItem[]
+
+  @@index([tenantId, productId, sortOrder])
+}
+
+model Menu {
+  id         String   @id @default(cuid())
+  tenantId   String
+  name       String
+  slug       String
+  channel    String
+  layoutType String
+  columns    Int      @default(4)
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items      MenuItem[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, isActive, channel])
+}
+
+model Course {
+  id         String   @id @default(cuid())
+  tenantId   String
+  name       String
+  shortLabel String?
+  sortOrder  Int      @default(0)
+  isActive   Boolean  @default(true)
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items      MenuItem[]
+
+  @@index([tenantId, sortOrder])
+}
+
+model MenuItem {
+  id               String   @id @default(cuid())
+  tenantId         String
+  menuId           String
+  productId        String
+  variantId        String?
+  courseId         String?
+  sortOrder        Int      @default(0)
+  priceOverrideCents Int?
+  isActive         Boolean  @default(true)
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  menu             Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant          ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  course           Course?  @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, menuId, sortOrder])
+  @@index([tenantId, productId])
+  @@index([tenantId, variantId])
+}

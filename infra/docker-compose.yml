@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: tably
+      POSTGRES_PASSWORD: tably
+      POSTGRES_DB: tably
+    volumes:
+      - tably_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  tably_postgres_data:
