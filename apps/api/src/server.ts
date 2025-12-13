@@ -1,10 +1,11 @@
 import express from "express";
 import cors from "cors";
-import { getTenantId } from "./tenant";
+import { getTenantIdFromRequest } from "./tenant";
 import { catalogRouter } from "./modules/catalog/routes";
 import { menuRouter } from "./modules/menu/routes";
 import { errorMiddleware, serviceUnavailable } from "./lib/http";
 import { prisma } from "./lib/prisma";
+import { ensureTenant } from "./ensureTenant";
 
 export function createServer() {
   const app = express();
@@ -28,10 +29,13 @@ export function createServer() {
   });
 
   app.use((req, _res, next) => {
-    // Validate tenant existence early
-    getTenantId();
+    // Validate tenant existence early using optional override header
+    getTenantIdFromRequest(req);
     next();
   });
+
+  // Ensure tenant exists for subsequent routes (not applied to /health or /ready)
+  app.use(ensureTenant);
 
   app.use("/core/catalog", catalogRouter);
   app.use("/core/menu", menuRouter);

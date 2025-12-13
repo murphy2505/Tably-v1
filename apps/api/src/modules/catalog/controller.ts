@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
-import { getTenantId } from "../../tenant";
+import { getTenantIdFromRequest } from "../../tenant";
 import { notFound } from "../../lib/http";
 
 export async function listRevenueGroups(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const isActiveQ = req.query.isActive as string | undefined;
   const orderByQ = req.query.orderBy as string | undefined;
   const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
@@ -17,12 +17,12 @@ export async function listRevenueGroups(req: Request, res: Response) {
   res.json({ data });
 }
 export async function createRevenueGroup(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const rg = await prisma.revenueGroup.create({ data: { tenantId, name: req.body.name, sortOrder: req.body.sortOrder ?? 0, isActive: req.body.isActive ?? true } });
   res.json({ data: rg });
 }
 export async function updateRevenueGroup(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.revenueGroup.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -30,7 +30,7 @@ export async function updateRevenueGroup(req: Request, res: Response) {
   res.json({ data: rg });
 }
 export async function deleteRevenueGroup(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.revenueGroup.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -39,7 +39,7 @@ export async function deleteRevenueGroup(req: Request, res: Response) {
 }
 
 export async function listProductGroups(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const isActiveQ = req.query.isActive as string | undefined;
   const orderByQ = req.query.orderBy as string | undefined;
   const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
@@ -52,12 +52,12 @@ export async function listProductGroups(req: Request, res: Response) {
   res.json({ data });
 }
 export async function createProductGroup(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const pg = await prisma.productGroup.create({ data: { tenantId, name: req.body.name, revenueGroupId: req.body.revenueGroupId, sortOrder: req.body.sortOrder ?? 0, isActive: req.body.isActive ?? true } });
   res.json({ data: pg });
 }
 export async function updateProductGroup(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.productGroup.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -65,7 +65,7 @@ export async function updateProductGroup(req: Request, res: Response) {
   res.json({ data: pg });
 }
 export async function deleteProductGroup(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.productGroup.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -74,7 +74,7 @@ export async function deleteProductGroup(req: Request, res: Response) {
 }
 
 export async function listCategories(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const isActiveQ = req.query.isActive as string | undefined;
   const orderByQ = req.query.orderBy as string | undefined;
   const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
@@ -87,12 +87,12 @@ export async function listCategories(req: Request, res: Response) {
   res.json({ data });
 }
 export async function createCategory(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const cat = await prisma.category.create({ data: { tenantId, name: req.body.name, sortOrder: req.body.sortOrder ?? 0, isActive: req.body.isActive ?? true } });
   res.json({ data: cat });
 }
 export async function updateCategory(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.category.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -100,7 +100,7 @@ export async function updateCategory(req: Request, res: Response) {
   res.json({ data: cat });
 }
 export async function deleteCategory(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.category.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -109,7 +109,7 @@ export async function deleteCategory(req: Request, res: Response) {
 }
 
 export async function listProducts(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const isActiveQ = req.query.isActive as string | undefined;
   const orderByQ = req.query.orderBy as string | undefined;
   const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
@@ -122,14 +122,21 @@ export async function listProducts(req: Request, res: Response) {
   res.json({ data });
 }
 export async function getProduct(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
-  const item = await prisma.product.findFirst({ where: { id, tenantId } });
+  const item = await prisma.product.findFirst({
+    where: { id, tenantId },
+    include: {
+      productGroup: true,
+      category: true,
+      variants: { orderBy: { sortOrder: "asc" } }
+    }
+  });
   if (!item) return notFound(res);
   res.json({ data: item });
 }
 export async function createProduct(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const prod = await prisma.product.create({
     data: {
       tenantId,
@@ -147,7 +154,7 @@ export async function createProduct(req: Request, res: Response) {
   res.json({ data: prod });
 }
 export async function updateProduct(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.product.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -168,7 +175,7 @@ export async function updateProduct(req: Request, res: Response) {
   res.json({ data: prod });
 }
 export async function deleteProduct(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.product.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -177,7 +184,7 @@ export async function deleteProduct(req: Request, res: Response) {
 }
 
 export async function listVariants(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const productId = req.query.productId as string | undefined;
   const isActiveQ = req.query.isActive as string | undefined;
   const orderByQ = req.query.orderBy as string | undefined;

@@ -71,3 +71,22 @@ npm run db:seed
 ```
 
 Keep `packages/db/prisma/migrations` committed in git to avoid drift.
+
+## Optional Tenant Override (Testing)
+You can override the tenant per request using the `x-tenant-id` header. If omitted, `DEFAULT_TENANT_ID` is used.
+
+Example:
+```bash
+curl -s http://localhost:4002/core/catalog/revenue-groups \
+  -H 'x-tenant-id: cafetaria-centrum' | jq
+```
+
+Note: Using `x-tenant-id` automatically creates the tenant on first request.
+
+Create data under a custom tenant:
+```bash
+curl -s -X POST http://localhost:4002/core/catalog/revenue-groups \
+  -H 'Content-Type: application/json' \
+  -H 'x-tenant-id: test-tenant' \
+  -d '{"name":"Test RG","sortOrder":1,"isActive":true}' | jq
+```

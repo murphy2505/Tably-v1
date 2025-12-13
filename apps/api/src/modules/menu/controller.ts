@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
-import { getTenantId } from "../../tenant";
+import { getTenantIdFromRequest } from "../../tenant";
 import { notFound } from "../../lib/http";
 
 export async function listMenus(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const isActiveQ = req.query.isActive as string | undefined;
   const orderByQ = req.query.orderBy as string | undefined;
   const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
@@ -17,7 +17,7 @@ export async function listMenus(req: Request, res: Response) {
   res.json({ data });
 }
 export async function createMenu(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const m = await prisma.menu.create({
     data: {
       tenantId,
@@ -33,7 +33,7 @@ export async function createMenu(req: Request, res: Response) {
   res.json({ data: m });
 }
 export async function updateMenu(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.menu.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -52,7 +52,7 @@ export async function updateMenu(req: Request, res: Response) {
   res.json({ data: m });
 }
 export async function deleteMenu(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.menu.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -61,7 +61,7 @@ export async function deleteMenu(req: Request, res: Response) {
 }
 
 export async function listCourses(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const isActiveQ = req.query.isActive as string | undefined;
   const orderByQ = req.query.orderBy as string | undefined;
   const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
@@ -74,12 +74,12 @@ export async function listCourses(req: Request, res: Response) {
   res.json({ data });
 }
 export async function createCourse(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const c = await prisma.course.create({ data: { tenantId, name: req.body.name, shortLabel: req.body.shortLabel ?? null, sortOrder: req.body.sortOrder ?? 0, isActive: req.body.isActive ?? true } });
   res.json({ data: c });
 }
 export async function updateCourse(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.course.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -87,7 +87,7 @@ export async function updateCourse(req: Request, res: Response) {
   res.json({ data: c });
 }
 export async function deleteCourse(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.course.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -96,7 +96,7 @@ export async function deleteCourse(req: Request, res: Response) {
 }
 
 export async function listMenuItems(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const menuId = req.query.menuId as string | undefined;
   const isActiveQ = req.query.isActive as string | undefined;
   const orderByQ = req.query.orderBy as string | undefined;
@@ -111,7 +111,7 @@ export async function listMenuItems(req: Request, res: Response) {
   res.json({ data });
 }
 export async function createMenuItem(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const mi = await prisma.menuItem.create({
     data: {
       tenantId,
@@ -127,7 +127,7 @@ export async function createMenuItem(req: Request, res: Response) {
   res.json({ data: mi });
 }
 export async function updateMenuItem(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.menuItem.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -146,7 +146,7 @@ export async function updateMenuItem(req: Request, res: Response) {
   res.json({ data: mi });
 }
 export async function deleteMenuItem(req: Request, res: Response) {
-  const tenantId = getTenantId();
+  const tenantId = getTenantIdFromRequest(req);
   const id = req.params.id;
   const existing = await prisma.menuItem.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -154,8 +154,8 @@ export async function deleteMenuItem(req: Request, res: Response) {
   res.json({ data: mi });
 }
 
-export async function getActivePosMenu(_req: Request, res: Response) {
-  const tenantId = getTenantId();
+export async function getActivePosMenu(req: Request, res: Response) {
+  const tenantId = getTenantIdFromRequest(req);
   const menu = await prisma.menu.findFirst({ where: { tenantId, isActive: true }, orderBy: { sortOrder: "asc" } });
   if (!menu) return res.json({ data: null });
   const items = await prisma.menuItem.findMany({
