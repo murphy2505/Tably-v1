@@ -149,7 +149,7 @@ export function App() {
                   <button className="bon-link" onClick={() => setLastReceiptOpen(true)}>
                     Laatste bon
                   </button>
-                  <span className={`status-pill ${statusClass}`}>{statusLabel}</span>
+                  <span className={`status-chip ${statusClass}`}>{statusLabel}</span>
                 </div>
               </div>
 
