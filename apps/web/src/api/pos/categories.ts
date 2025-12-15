@@ -1,4 +1,4 @@
-import axios from "axios";
+import http from "../../services/http";
 
 export type CategoryDTO = {
   id: string;
@@ -12,23 +12,23 @@ function tenantHeaders() {
   return { headers: { "x-tenant-id": tenantId } };
 }
 
-const base = "/pos-api/core/catalog/categories";
+const base = "/core/catalog/categories";
 
 export async function apiListCategories(): Promise<CategoryDTO[]> {
-  const res = await axios.get<{ data: CategoryDTO[] }>(base, tenantHeaders());
+  const res = await http.get<{ data: CategoryDTO[] }>(base, tenantHeaders());
   return res.data.data;
 }
 
 export async function apiCreateCategory(payload: { name: string; sortOrder?: number; isActive?: boolean }): Promise<CategoryDTO> {
-  const res = await axios.post<{ data: CategoryDTO }>(base, payload, tenantHeaders());
+  const res = await http.post<{ data: CategoryDTO }>(base, payload, tenantHeaders());
   return res.data.data;
 }
 
 export async function apiUpdateCategory(id: string, payload: Partial<{ name: string; sortOrder: number; isActive: boolean }>): Promise<CategoryDTO> {
-  const res = await axios.put<{ data: CategoryDTO }>(`${base}/${id}`, payload, tenantHeaders());
+  const res = await http.put<{ data: CategoryDTO }>(`${base}/${id}`, payload, tenantHeaders());
   return res.data.data;
 }
 
 export async function apiDeleteCategory(id: string): Promise<void> {
-  await axios.delete(`${base}/${id}`, tenantHeaders());
+  await http.delete(`${base}/${id}`, tenantHeaders());
 }

@@ -10,8 +10,21 @@ import { ensureTenant } from "./ensureTenant";
 export function createServer() {
   const app = express();
 
-  const origin = process.env.CORS_ORIGIN || "http://localhost:5173";
-  app.use(cors({ origin, credentials: false }));
+  const allowedOrigins = [
+    "http://localhost:5173",
+    "http://192.168.2.12:5173",
+  ];
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl) and same-origin
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        return callback(new Error("Not allowed by CORS"));
+      },
+      credentials: true,
+    })
+  );
   app.use(express.json());
 
   // Health endpoints (minimal)
