@@ -3,6 +3,7 @@ import cors from "cors";
 import { getTenantIdFromRequest } from "./tenant";
 import { catalogRouter } from "./modules/catalog/routes";
 import { menuRouter } from "./modules/menu/routes";
+import { ordersRouter } from "./modules/orders/routes";
 import { errorMiddleware, serviceUnavailable } from "./lib/http";
 import { prisma } from "./lib/prisma";
 import { ensureTenant } from "./ensureTenant";
@@ -52,6 +53,7 @@ export function createServer() {
 
   app.use("/core/catalog", catalogRouter);
   app.use("/core/menu", menuRouter);
+  app.use("/", ordersRouter);
 
   app.use(errorMiddleware);
 

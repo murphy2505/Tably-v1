@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useOrders, type Order } from "../../stores/ordersStore";
+import { apiTransitionOrder } from "../../api/pos/orders";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -100,6 +101,21 @@ export default function OrdersScreen() {
                 </div>
 
                 <div className="order-card-actions">
+                  {/* Dev-only smoke test: transition OPEN -> SENT */}
+                  {o.status === "OPEN" && (
+                    <button
+                      className="btn"
+                      onClick={async () => {
+                        try {
+                          await apiTransitionOrder(o.id, "SENT");
+                        } catch (e) {
+                          console.warn("transition failed", e);
+                        }
+                      }}
+                    >
+                      Markeer als verzonden (dev)
+                    </button>
+                  )}
                   {o.status === "OPEN" ? (
                     <>
                       <button

@@ -9,6 +9,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum OrderStatus {
+  OPEN
+  SENT
+  IN_PREP
+  READY
+  COMPLETED
+  CANCELLED
+}
+
 model Tenant {
   id        String   @id
   name      String
@@ -23,6 +32,8 @@ model Tenant {
   courses       Course[]
   menuItems     MenuItem[]
   vatRates      VatRate[]
+  orders        Order[]
+  orderLines    OrderLine[]
 }
 
 model RevenueGroup {
@@ -212,4 +223,41 @@ model MenuItem {
   @@index([tenantId, menuId, sortOrder])
   @@index([tenantId, productId])
   @@index([tenantId, variantId])
+}
+
+model Order {
+  id        String      @id @default(cuid())
+  tenantId  String
+  status    OrderStatus @default(OPEN)
+
+  sentAt       DateTime?
+  inPrepAt     DateTime?
+  readyAt      DateTime?
+  completedAt  DateTime?
+  cancelledAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines  OrderLine[]
+
+  @@index([tenantId, status])
+}
+
+model OrderLine {
+  id        String @id @default(cuid())
+  tenantId  String
+  orderId   String
+  title     String
+  qty       Int
+  priceCents Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, orderId])
 }

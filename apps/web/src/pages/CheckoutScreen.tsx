@@ -87,8 +87,7 @@ export default function CheckoutScreen() {
 
   return (
     <div className="checkout-screen light">
-      {/* Floating last receipt button */}
-      <FloatingLastReceipt />
+      
 
       <div className="checkout-grid">
         {/* LEFT column */}
