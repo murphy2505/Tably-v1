@@ -5,6 +5,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    strictPort: true
-  }
+    strictPort: true,
+    proxy: {
+      "/pos-api": {
+        target: "http://localhost:4002",
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/pos-api/, ""),
+      },
+    },
+  },
 });

@@ -25,6 +25,9 @@ export function App() {
 
   const [lastReceiptOpen, setLastReceiptOpen] = useState(false);
 
+  type OrderLine = { id: string; title: string; priceCents: number; qty: number };
+  const [order, setOrder] = useState<OrderLine[]>([]);
+
   useEffect(() => {
     const ac = new AbortController();
     setLoading(true);
@@ -67,6 +70,26 @@ export function App() {
 
     return items;
   }, [menu, activeCategory, search]);
+
+  const totalCents = useMemo(() => order.reduce((sum, l) => sum + l.qty * l.priceCents, 0), [order]);
+  const itemsCount = useMemo(() => order.reduce((sum, l) => sum + l.qty, 0), [order]);
+
+  function addItemToOrder(item: PosMenuDTO["items"][number]) {
+    const id = item.id;
+    const title = item.variant ? item.variant.name : item.product.name;
+    const priceCents = item.priceCents;
+    setOrder((prev) => {
+      const existing = prev.find((l) => l.id === id);
+      if (existing) {
+        return prev.map((l) => (l.id === id ? { ...l, qty: l.qty + 1 } : l));
+      }
+      return [...prev, { id, title, priceCents, qty: 1 }];
+    });
+  }
+
+  function removeLine(id: string) {
+    setOrder((prev) => prev.filter((l) => l.id !== id));
+  }
 
   const statusClass = loading ? "loading" : error ? "error" : "ready";
   const statusLabel = loading ? "Loading" : error ? "Error" : "Ready";
@@ -128,7 +151,7 @@ export function App() {
                 const courseBadge = categoryLabelFromItem(item);
 
                 return (
-                  <button className="product-tile" key={item.id} onClick={() => console.log("tile", item.id)}>
+                  <button className="product-tile" key={item.id} onClick={() => addItemToOrder(item)}>
                     <div className="tile-badge">{courseBadge}</div>
                     <div className="tile-title light-text">{title}</div>
                     {subtitle && <div className="tile-subtitle">{subtitle}</div>}
@@ -155,16 +178,31 @@ export function App() {
 
               <div className="bon-total">
                 <div className="bon-total-label">Totaal</div>
-                <div className="bon-total-value">€ 0,00</div>
+                <div className="bon-total-value">{formatEuro(totalCents)}</div>
               </div>
 
               <div className="bon-meta">
                 <div>BTW: —</div>
-                <div>Items: 0</div>
+                <div>Items: {itemsCount}</div>
               </div>
             </div>
 
-            <div className="order-list empty">Nog geen items</div>
+            <div className={`order-list ${order.length === 0 ? "empty" : ""}`}>
+              {order.length === 0 ? (
+                <div>Nog geen items</div>
+              ) : (
+                order.map((l) => (
+                  <div key={l.id} className="order-line">
+                    <div className="order-line-title">{l.title}</div>
+                    <div className="order-line-meta">
+                      <span className="qty">{l.qty}×</span>
+                      <span className="line-total">{formatEuro(l.qty * l.priceCents)}</span>
+                    </div>
+                    <button className="order-line-remove" onClick={() => removeLine(l.id)}>×</button>
+                  </div>
+                ))
+              )}
+            </div>
 
             <div className="actions">
               <div className="numpad">

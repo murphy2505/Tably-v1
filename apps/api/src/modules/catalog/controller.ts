@@ -48,12 +48,26 @@ export async function listProductGroups(req: Request, res: Response) {
   if (isActiveQ === "false") where.isActive = false;
   const allowed = ["sortOrder", "name"];
   const field = allowed.includes(orderByQ || "") ? (orderByQ as string) : "sortOrder";
-  const data = await prisma.productGroup.findMany({ where, orderBy: { [field]: orderQ } as any });
+  const data = await prisma.productGroup.findMany({
+    where,
+    orderBy: { [field]: orderQ } as any,
+    select: { id: true, name: true, code: true, vatRate: true, isActive: true }
+  });
   res.json({ data });
 }
 export async function createProductGroup(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
-  const pg = await prisma.productGroup.create({ data: { tenantId, name: req.body.name, revenueGroupId: req.body.revenueGroupId, sortOrder: req.body.sortOrder ?? 0, isActive: req.body.isActive ?? true } });
+  const pg = await prisma.productGroup.create({
+    data: {
+      tenantId,
+      name: req.body.name,
+      code: req.body.code ?? null,
+      vatRate: req.body.vatRate,
+      revenueGroupId: req.body.revenueGroupId ?? null,
+      sortOrder: req.body.sortOrder ?? 0,
+      isActive: req.body.isActive ?? true
+    }
+  });
   res.json({ data: pg });
 }
 export async function updateProductGroup(req: Request, res: Response) {
@@ -61,7 +75,17 @@ export async function updateProductGroup(req: Request, res: Response) {
   const id = req.params.id;
   const existing = await prisma.productGroup.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
-  const pg = await prisma.productGroup.update({ where: { id }, data: { name: req.body.name ?? existing.name, revenueGroupId: req.body.revenueGroupId ?? existing.revenueGroupId, sortOrder: req.body.sortOrder ?? existing.sortOrder, isActive: req.body.isActive ?? existing.isActive } });
+  const pg = await prisma.productGroup.update({
+    where: { id },
+    data: {
+      name: req.body.name ?? existing.name,
+      code: req.body.code ?? existing.code,
+      vatRate: req.body.vatRate ?? existing.vatRate,
+      revenueGroupId: req.body.revenueGroupId ?? existing.revenueGroupId,
+      sortOrder: req.body.sortOrder ?? existing.sortOrder,
+      isActive: req.body.isActive ?? existing.isActive
+    }
+  });
   res.json({ data: pg });
 }
 export async function deleteProductGroup(req: Request, res: Response) {
@@ -69,6 +93,8 @@ export async function deleteProductGroup(req: Request, res: Response) {
   const id = req.params.id;
   const existing = await prisma.productGroup.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
+  const count = await prisma.product.count({ where: { tenantId, productGroupId: id } });
+  if (count > 0) return res.status(409).json({ error: "Productgroep kan niet verwijderd worden: er zijn gekoppelde producten." });
   const pg = await prisma.productGroup.delete({ where: { id } });
   res.json({ data: pg });
 }
@@ -104,6 +130,10 @@ export async function deleteCategory(req: Request, res: Response) {
   const id = req.params.id;
   const existing = await prisma.category.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
+  const count = await prisma.product.count({ where: { tenantId, categoryId: id } });
+  if (count > 0) {
+    return res.status(409).json({ error: "Categorie heeft gekoppelde producten" });
+  }
   const cat = await prisma.category.delete({ where: { id } });
   res.json({ data: cat });
 }
@@ -118,7 +148,14 @@ export async function listProducts(req: Request, res: Response) {
   if (isActiveQ === "false") where.isActive = false;
   const allowed = ["name", "createdAt"];
   const field = allowed.includes(orderByQ || "") ? (orderByQ as string) : "createdAt";
-  const data = await prisma.product.findMany({ where, orderBy: { [field]: orderQ } as any });
+  const data = await prisma.product.findMany({
+    where,
+    orderBy: { [field]: orderQ } as any,
+    include: {
+      productGroup: { select: { id: true, name: true, code: true, vatRate: true } },
+      category: { select: { id: true, name: true } }
+    }
+  });
   res.json({ data });
 }
 export async function getProduct(req: Request, res: Response) {
@@ -127,8 +164,8 @@ export async function getProduct(req: Request, res: Response) {
   const item = await prisma.product.findFirst({
     where: { id, tenantId },
     include: {
-      productGroup: true,
-      category: true,
+      productGroup: { select: { id: true, name: true, code: true, vatRate: true } },
+      category: { select: { id: true, name: true } },
       variants: { orderBy: { sortOrder: "asc" } }
     }
   });
@@ -158,6 +195,10 @@ export async function updateProduct(req: Request, res: Response) {
   const id = req.params.id;
   const existing = await prisma.product.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
+  if (req.body.productGroupId) {
+    const pg = await prisma.productGroup.findFirst({ where: { id: req.body.productGroupId, tenantId } });
+    if (!pg) return notFound(res);
+  }
   const prod = await prisma.product.update({
     where: { id },
     data: {

@@ -1,4 +1,4 @@
-// Prisma schema for Tably Step 1
+// Prisma schema for Tably Step 1 (clean)
 
 generator client {
   provider = "prisma-client-js"
@@ -10,141 +10,203 @@ datasource db {
 }
 
 model Tenant {
-  id        String         @id
+  id        String   @id
   name      String
-  createdAt DateTime       @default(now())
+  createdAt DateTime @default(now())
+
   revenueGroups RevenueGroup[]
   productGroups ProductGroup[]
-  categories Category[]
-  products  Product[]
-  variants  ProductVariant[]
-  menus     Menu[]
-  courses   Course[]
-  menuItems MenuItem[]
+  categories    Category[]
+  products      Product[]
+  variants      ProductVariant[]
+  menus         Menu[]
+  courses       Course[]
+  menuItems     MenuItem[]
+  vatRates      VatRate[]
 }
 
 model RevenueGroup {
-  id         String       @id @default(cuid())
-  tenantId   String
-  name       String
-  sortOrder  Int          @default(0)
-  isActive   Boolean      @default(true)
-  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  productGroups ProductGroup[]
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  code      String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  @@index([tenantId, sortOrder])
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productGroups ProductGroup[]
+  categories    Category[]
+  products      Product[]
+
+  @@index([tenantId, isActive, sortOrder])
+}
+
+model VatRate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  rate      Int
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  products      Product[]
+  productGroups ProductGroup[]
+  categories    Category[]
+
+  @@index([tenantId, isActive, sortOrder])
 }
 
 model ProductGroup {
-  id           String    @id @default(cuid())
-  tenantId     String
-  name         String
-  revenueGroupId String
-  sortOrder    Int       @default(0)
-  isActive     Boolean   @default(true)
-  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  revenueGroup RevenueGroup @relation(fields: [revenueGroupId], references: [id], onDelete: Restrict)
-  products     Product[]
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  code      String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  @@index([tenantId, revenueGroupId])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // defaults (optional)
+  revenueGroupId String?
+  revenueGroup   RevenueGroup? @relation(fields: [revenueGroupId], references: [id], onDelete: SetNull)
+
+  vatRateId String?
+  vatRate   VatRate? @relation(fields: [vatRateId], references: [id], onDelete: SetNull)
+
+  products Product[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, name])
 }
 
 model Category {
-  id         String    @id @default(cuid())
-  tenantId   String
-  name       String
-  sortOrder  Int       @default(0)
-  isActive   Boolean   @default(true)
-  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  products   Product[]
+  id        String  @id @default(cuid())
+  tenantId  String
+  name      String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  defaultRevenueGroupId String?
+  defaultRevenueGroup   RevenueGroup? @relation(fields: [defaultRevenueGroupId], references: [id], onDelete: SetNull)
+
+  defaultVatRateId String?
+  defaultVatRate   VatRate? @relation(fields: [defaultVatRateId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, sortOrder])
 }
 
 model Product {
-  id               String   @id @default(cuid())
-  tenantId         String
-  productGroupId   String
-  categoryId       String?
-  name             String
-  description      String?
-  basePriceCents   Int
-  vatRateBps       Int
-  imageUrl         String?
-  allergenTags     Json?
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  productGroup     ProductGroup @relation(fields: [productGroupId], references: [id], onDelete: Restrict)
-  category         Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  variants         ProductVariant[]
-  menuItems        MenuItem[]
+  id             String @id @default(cuid())
+  tenantId       String
+  productGroupId String
+  categoryId     String
+
+  // overrides (optional)
+  revenueGroupId String?
+  vatRateId      String?
+
+  name           String
+  description    String?
+  basePriceCents Int
+  imageUrl       String?
+  allergenTags   Json?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productGroup ProductGroup @relation(fields: [productGroupId], references: [id], onDelete: Restrict)
+  category     Category     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  revenueGroup RevenueGroup? @relation(fields: [revenueGroupId], references: [id], onDelete: SetNull)
+  vatRate      VatRate?      @relation(fields: [vatRateId], references: [id], onDelete: SetNull)
+
+  variants  ProductVariant[]
+  menuItems MenuItem[]
 
   @@index([tenantId, productGroupId])
   @@index([tenantId, categoryId])
+  @@index([tenantId, revenueGroupId])
+  @@index([tenantId, vatRateId])
 }
 
 model ProductVariant {
-  id               String   @id @default(cuid())
-  tenantId         String
-  productId        String
-  name             String
-  priceOverrideCents Int?
-  sortOrder        Int      @default(0)
-  isActive         Boolean  @default(true)
-  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  menuItems        MenuItem[]
+  id        String  @id @default(cuid())
+  tenantId  String
+  productId String
+  name      String
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  menuItems MenuItem[]
 
   @@index([tenantId, productId, sortOrder])
 }
 
 model Menu {
-  id         String   @id @default(cuid())
+  id         String  @id @default(cuid())
   tenantId   String
   name       String
   slug       String
   channel    String
   layoutType String
-  columns    Int      @default(4)
-  isActive   Boolean  @default(true)
-  sortOrder  Int      @default(0)
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  items      MenuItem[]
+  columns    Int     @default(4)
+  isActive   Boolean @default(true)
+  sortOrder  Int     @default(0)
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items  MenuItem[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, isActive, channel])
 }
 
 model Course {
-  id         String   @id @default(cuid())
+  id         String  @id @default(cuid())
   tenantId   String
   name       String
   shortLabel String?
-  sortOrder  Int      @default(0)
-  isActive   Boolean  @default(true)
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  items      MenuItem[]
+  sortOrder  Int     @default(0)
+  isActive   Boolean @default(true)
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items  MenuItem[]
 
   @@index([tenantId, sortOrder])
 }
 
 model MenuItem {
-  id               String   @id @default(cuid())
-  tenantId         String
-  menuId           String
-  productId        String
-  variantId        String?
-  courseId         String?
-  sortOrder        Int      @default(0)
+  id                 String  @id @default(cuid())
+  tenantId           String
+  menuId             String
+  productId          String
+  variantId          String?
+  courseId           String?
+  sortOrder          Int     @default(0)
   priceOverrideCents Int?
-  isActive         Boolean  @default(true)
-  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  menu             Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  product          Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
-  variant          ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-  course           Course?  @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  isActive           Boolean @default(true)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  menu    Menu    @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  course  Course?         @relation(fields: [courseId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, menuId, sortOrder])
   @@index([tenantId, productId])

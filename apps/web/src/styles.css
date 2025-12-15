@@ -161,45 +161,45 @@ body {
   background: rgba(168, 85, 247, 0.08);
 }
 
-/* ===== Rail icons: clean purple outline (no badge) ===== */
+/* ===== Rail icons: clean purple outlined (single source of truth) ===== */
 
 .rail-icon {
-  width: 28px;               /* iets groter klikgebied */
+  width: 28px;
   height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 
-  color: #7c3aed;            /* paars */
+  color: #9ca3af; /* default: rustig grijs */
 }
 
-/* lucide icon groter & strak */
-.rail-icon svg {
-  width: 22px;               /* ← HIER zit de grootte */
+/* lucide icon size */
+.rail-icon svg,
+.rail-logo svg {
+  width: 22px;
   height: 22px;
   stroke: currentColor;
 }
 
-/* hover: iets donkerder */
+/* hover */
 .rail-item:hover .rail-icon,
 .rail-child:hover .rail-icon {
   color: #6d28d9;
 }
 
-.rail-icon { color: #9ca3af; }        /* grijs */
-.rail-active .rail-icon { color: #6d28d9; }
-
-/* actief: iets zwaarder + mini focus */
+/* actief */
 .rail-active .rail-icon {
   color: #5b21b6;
   transform: scale(1.08);
 }
 
+/* labels */
 .rail-label {
   font-weight: 800;
   color: #111827;
 }
 
+/* sub-items */
 .rail-children {
   display: flex;
   flex-direction: column;
@@ -207,13 +207,6 @@ body {
   padding: 2px 0 2px 8px;
 }
 
-/* Lucide sizing */
-.rail-icon svg,
-.rail-logo svg {
-  width: 20px;
-  height: 20px;
-  stroke: currentColor;
-}
 
 /* =========================
    POS Body Grid
@@ -417,6 +410,10 @@ body {
 }
 
 .order-list.empty { font-style: italic; }
+.order-line { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed #e5e7eb; }
+.order-line-title { color: #111827; font-weight: 600; }
+.order-line-meta { display: flex; gap: 8px; align-items: center; color: #374151; }
+.order-line-remove { background: transparent; border: 0; color: #991b1b; cursor: pointer; font-size: 18px; line-height: 1; }
 
 .actions {
   padding: 12px;
@@ -532,6 +529,41 @@ body {
 }
 
 /* =========================
+   Revenue Groups (rg-*)
+========================= */
+.rg-page { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.rg-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 2px solid #ede9fe; }
+.rg-subtitle { color: #6b7280; margin: 6px 0 0; }
+.rg-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.rg-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.rg-card { border: 1px solid #ede9fe; border-radius: 10px; padding: 12px; background: #fff; }
+.rg-card-title { font-weight: 700; color: #6d28d9; margin-bottom: 6px; }
+.rg-card-body { color: #374151; font-size: 14px; }
+.rg-table { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
+.rg-row { display: grid; grid-template-columns: 1fr 140px 120px 200px; gap: 12px; padding: 10px 12px; align-items: center; border-bottom: 1px solid #f3f4f6; }
+.rg-row.rg-head { background: #fafafa; font-weight: 700; color: #374151; }
+.rg-cell-name .rg-name { font-weight: 600; color: #111827; }
+.rg-cell-name .rg-note { font-size: 12px; color: #6b7280; }
+.rg-cell-code { color: #374151; }
+.rg-cell-status { }
+.rg-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #e5e7eb; }
+.rg-pill.active { background: #f5f3ff; border-color: #ede9fe; color: #6d28d9; }
+.rg-pill.inactive { background: #f3f4f6; color: #6b7280; }
+.rg-cell-actions { display: inline-flex; gap: 8px; }
+.rg-link { background: transparent; border: 0; color: #6d28d9; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.rg-empty { display: flex; align-items: center; justify-content: center; padding: 24px; }
+.rg-form { display: grid; gap: 10px; }
+.rg-field { display: grid; gap: 6px; }
+.rg-field input, .rg-field textarea { width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; }
+.rg-checkbox { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; }
+.rg-error { color: #991b1b; font-size: 13px; }
+
+@media (max-width: 900px) {
+  .rg-cards { grid-template-columns: 1fr; }
+  .rg-row { grid-template-columns: 1fr 100px 100px 1fr; }
+}
+
+/* =========================
    Mobile Tabs / Responsive
 ========================= */
 .mobile-tabs {
@@ -579,4 +611,9 @@ body {
 @media (max-width: 700px) {
   .mobile-tabs { display: flex; }
   .pos-body { grid-template-columns: 1fr; }
+}
+
+.rg-link:hover{
+  text-decoration: underline;
+  opacity: 0.9;
 }

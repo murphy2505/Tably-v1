@@ -35,11 +35,14 @@ catalogRouter.get("/product-groups", asyncHandler(ctrl.listProductGroups));
 catalogRouter.post("/product-groups", (req, res, next) => {
   const parsed = productGroupCreateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
+  // use transformed values back on req for controller
+  req.body = parsed.data;
   return asyncHandler(ctrl.createProductGroup)(req, res, next);
 });
 catalogRouter.put("/product-groups/:id", (req, res, next) => {
   const parsed = productGroupUpdateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
+  req.body = parsed.data;
   return asyncHandler(ctrl.updateProductGroup)(req, res, next);
 });
 catalogRouter.delete("/product-groups/:id", asyncHandler(ctrl.deleteProductGroup));

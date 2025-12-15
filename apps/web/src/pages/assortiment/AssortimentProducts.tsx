@@ -19,8 +19,6 @@ export default function AssortimentProducts() {
       try {
         setError(null);
         const list = await apiListProducts();
-
-        // hard guard: altijd array
         if (!alive) return;
         setProducts(Array.isArray(list) ? list : []);
       } catch (e) {
@@ -62,6 +60,7 @@ export default function AssortimentProducts() {
             <tr>
               <th align="left">Naam</th>
               <th align="left">Productgroep</th>
+              <th align="left">Categorie</th>
               <th align="right">Prijs</th>
               <th align="center">Actief</th>
             </tr>
@@ -71,6 +70,7 @@ export default function AssortimentProducts() {
               <tr key={p.id}>
                 <td>{p.name}</td>
                 <td>{p.productGroup?.name ?? "—"}</td>
+                <td>{p.category?.name ?? "—"}</td>
                 <td align="right">{euro(p.basePriceCents)}</td>
                 <td align="center">{p.isActive ? "✓" : "—"}</td>
               </tr>

@@ -5,10 +5,11 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AppShell from "./app/AppShell";
 import { App as PosView } from "./App";
 
-import AssortimentProducts from "./pages/AssortimentProducts";
-import AssortimentCategories from "./pages/AssortimentCategories";
+import AssortimentProducts from "./pages/assortiment/AssortimentProducts";
+import AssortimentCategories from "./pages/assortiment/AssortimentCategories";
 import AssortimentCourses from "./pages/AssortimentCourses";
 import AssortimentMenus from "./pages/AssortimentMenus";
+import AssortimentRevenueGroups from "./pages/AssortimentRevenueGroups";
 import Loyalty from "./pages/Loyalty";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
@@ -29,6 +30,7 @@ root.render(
             <Route path="categories" element={<AssortimentCategories />} />
             <Route path="courses" element={<AssortimentCourses />} />
             <Route path="menus" element={<AssortimentMenus />} />
+            <Route path="revenue-groups" element={<AssortimentRevenueGroups />} />
           </Route>
 
           <Route path="loyalty" element={<Loyalty />} />

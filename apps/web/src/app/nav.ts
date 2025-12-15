@@ -9,6 +9,7 @@ import {
   Gift,
   BarChart3,
   Settings,
+  Wallet,
 } from "lucide-react";
 
 export type Role = "cashier" | "manager" | "admin";
@@ -58,6 +59,12 @@ export const NAV: NavItem[] = [
         path: "/assortiment/menus",
         label: "Menukaarten",
         icon: ClipboardList,
+        roles: ["manager", "admin"],
+      },
+      {
+        path: "/assortiment/revenue-groups",
+        label: "Omzetgroepen",
+        icon: Wallet,
         roles: ["manager", "admin"],
       },
     ],

@@ -8,8 +8,10 @@ export const revenueGroupCreateSchema = z.object({
 export const revenueGroupUpdateSchema = revenueGroupCreateSchema.partial();
 
 export const productGroupCreateSchema = z.object({
-  name: z.string().min(1),
-  revenueGroupId: z.string().min(1),
+  name: z.string().min(1).transform((s) => s.trim()),
+  code: z.string().trim().optional().transform((s) => (s ? s.toUpperCase() : undefined)),
+  vatRate: z.enum(["HIGH", "LOW", "ZERO"]),
+  revenueGroupId: z.string().min(1).optional(),
   sortOrder: z.number().int().optional(),
   isActive: z.boolean().optional()
 });
