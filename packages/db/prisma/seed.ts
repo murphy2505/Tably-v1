@@ -32,12 +32,22 @@ async function main() {
   await prisma.revenueGroup.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
   await prisma.vatRate.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
 
-  // VatRates
-  const vatHigh = await prisma.vatRate.create({
-    data: { tenantId: DEFAULT_TENANT_ID, name: "Hoog", rate: 21, sortOrder: 1, isActive: true },
+  // VatRates (seed idempotent via upsert)
+  // 0% is used for emballage/statiegeld/doorbelasting.
+  const vatZero = await prisma.vatRate.upsert({
+    where: { id: `${DEFAULT_TENANT_ID}-VAT-0` },
+    update: { name: "Geen BTW (0%)", rate: 0, sortOrder: 0, isActive: true },
+    create: { id: `${DEFAULT_TENANT_ID}-VAT-0`, tenantId: DEFAULT_TENANT_ID, name: "Geen BTW (0%)", rate: 0, sortOrder: 0, isActive: true },
   });
-  const vatLow = await prisma.vatRate.create({
-    data: { tenantId: DEFAULT_TENANT_ID, name: "Laag", rate: 9, sortOrder: 2, isActive: true },
+  const vatLow = await prisma.vatRate.upsert({
+    where: { id: `${DEFAULT_TENANT_ID}-VAT-9` },
+    update: { name: "Laag (9%)", rate: 9, sortOrder: 1, isActive: true },
+    create: { id: `${DEFAULT_TENANT_ID}-VAT-9`, tenantId: DEFAULT_TENANT_ID, name: "Laag (9%)", rate: 9, sortOrder: 1, isActive: true },
+  });
+  const vatHigh = await prisma.vatRate.upsert({
+    where: { id: `${DEFAULT_TENANT_ID}-VAT-21` },
+    update: { name: "Hoog (21%)", rate: 21, sortOrder: 2, isActive: true },
+    create: { id: `${DEFAULT_TENANT_ID}-VAT-21`, tenantId: DEFAULT_TENANT_ID, name: "Hoog (21%)", rate: 21, sortOrder: 2, isActive: true },
   });
 
   // RevenueGroups (omzetgroepen)

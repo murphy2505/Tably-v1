@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Power, Trash } from "lucide-react";
 import { apiListCategories, apiCreateCategory, apiUpdateCategory, apiDeleteCategory, type CategoryDTO } from "../../api/pos/categories";
+import { apiListVatRates, type VatRateDTO } from "../../api/pos/vatRates";
 
 export default function AssortimentCategories() {
   const [categories, setCategories] = useState<CategoryDTO[]>([]);
@@ -12,7 +13,9 @@ export default function AssortimentCategories() {
   const [formName, setFormName] = useState("");
   const [formSort, setFormSort] = useState<number>(0);
   const [formActive, setFormActive] = useState<boolean>(true);
+  const [formDefaultVatRateId, setFormDefaultVatRateId] = useState<string>("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [vatRates, setVatRates] = useState<VatRateDTO[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -21,8 +24,10 @@ export default function AssortimentCategories() {
       try {
         setError(null);
         const list = await apiListCategories();
+        const rates = await apiListVatRates();
         if (!alive) return;
         setCategories(Array.isArray(list) ? list : []);
+        setVatRates(rates || []);
       } catch (e) {
         if (!alive) return;
         setCategories([]);
@@ -57,6 +62,7 @@ export default function AssortimentCategories() {
     setFormName("");
     setFormSort(0);
     setFormActive(true);
+    setFormDefaultVatRateId("");
     setActionError(null);
     setModalOpen(true);
   }
@@ -66,6 +72,7 @@ export default function AssortimentCategories() {
     setFormName(cat.name);
     setFormSort(cat.sortOrder ?? 0);
     setFormActive(cat.isActive);
+    setFormDefaultVatRateId(cat.defaultVatRateId ?? "");
     setActionError(null);
     setModalOpen(true);
   }
@@ -73,10 +80,11 @@ export default function AssortimentCategories() {
   async function submitForm() {
     try {
       setActionError(null);
+      const payload = { name: formName, sortOrder: formSort, isActive: formActive, defaultVatRateId: formDefaultVatRateId || null };
       if (editId) {
-        await apiUpdateCategory(editId, { name: formName, sortOrder: formSort, isActive: formActive });
+        await apiUpdateCategory(editId, payload);
       } else {
-        await apiCreateCategory({ name: formName, sortOrder: formSort, isActive: formActive });
+        await apiCreateCategory(payload);
       }
       setModalOpen(false);
       await refresh();
@@ -215,6 +223,15 @@ export default function AssortimentCategories() {
                 <label className="rg-field">
                   <span>Sort</span>
                   <input type="number" value={formSort} onChange={(e) => setFormSort(Number(e.target.value) || 0)} placeholder="Bijv. 1" />
+                </label>
+                <label className="rg-field">
+                  <span>Categorie default BTW</span>
+                  <select value={formDefaultVatRateId} onChange={(e) => setFormDefaultVatRateId(e.target.value)}>
+                    <option value="">Geen</option>
+                    {vatRates.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
                 </label>
                 <label className="rg-checkbox">
                   <input type="checkbox" checked={formActive} onChange={(e) => setFormActive(e.target.checked)} />

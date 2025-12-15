@@ -5,6 +5,7 @@ export type CategoryDTO = {
   name: string;
   sortOrder?: number | null;
   isActive: boolean;
+  defaultVatRateId?: string | null;
 };
 
 function tenantHeaders() {
@@ -19,12 +20,12 @@ export async function apiListCategories(): Promise<CategoryDTO[]> {
   return res.data.data;
 }
 
-export async function apiCreateCategory(payload: { name: string; sortOrder?: number; isActive?: boolean }): Promise<CategoryDTO> {
+export async function apiCreateCategory(payload: { name: string; sortOrder?: number; isActive?: boolean; defaultVatRateId?: string | null }): Promise<CategoryDTO> {
   const res = await http.post<{ data: CategoryDTO }>(base, payload, tenantHeaders());
   return res.data.data;
 }
 
-export async function apiUpdateCategory(id: string, payload: Partial<{ name: string; sortOrder: number; isActive: boolean }>): Promise<CategoryDTO> {
+export async function apiUpdateCategory(id: string, payload: Partial<{ name: string; sortOrder: number; isActive: boolean; defaultVatRateId?: string | null }>): Promise<CategoryDTO> {
   const res = await http.put<{ data: CategoryDTO }>(`${base}/${id}`, payload, tenantHeaders());
   return res.data.data;
 }

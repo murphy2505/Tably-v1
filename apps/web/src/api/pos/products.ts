@@ -7,6 +7,8 @@ export type Product = {
   isActive: boolean;
   productGroup?: { id: string; name: string } | null;
   category?: { id: string; name: string } | null;
+  vatRateId?: string | null;
+  vatRate?: { id: string; name: string; rate: number } | null;
 };
 
 function tenantHeaders() {
@@ -21,12 +23,18 @@ export async function apiListProducts(): Promise<Product[]> {
   return res.data.data;
 }
 
+export async function apiGetProduct(id: string): Promise<Product> {
+  const res = await http.get<{ data: Product }>(`${base}/${id}`, tenantHeaders());
+  return res.data.data;
+}
+
 export async function apiCreateProduct(payload: {
   name: string;
   basePriceCents: number;
   isActive?: boolean;
   categoryId?: string | null;
   productGroupId?: string | null;
+  vatRateId?: string | null;
 }): Promise<Product> {
   const res = await http.post<{ data: Product }>(base, payload, tenantHeaders());
   return res.data.data;
@@ -40,6 +48,7 @@ export async function apiUpdateProduct(
     isActive: boolean;
     categoryId: string | null;
     productGroupId: string | null;
+    vatRateId?: string | null;
   }>
 ): Promise<Product> {
   const res = await http.put<{ data: Product }>(`${base}/${id}`, payload, tenantHeaders());

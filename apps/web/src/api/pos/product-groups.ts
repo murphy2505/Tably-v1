@@ -5,7 +5,7 @@ export type ProductGroupDTO = {
   id: string;
   name: string;
   code?: string;
-  vatRate: "HIGH" | "LOW" | "ZERO";
+  vatRateId?: string | null;
   isActive?: boolean;
 };
 

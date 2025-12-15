@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useOrders } from "./stores/ordersStore";
 import { fetchActivePosMenu } from "./api/pos";
 import type { PosMenuDTO } from "./types/pos";
 
 function formatEuro(cents: number): string {
-  return new Intl.NumberFormat("nl-NL", {
-    style: "currency",
-    currency: "EUR",
-  }).format(cents / 100);
+  return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
 function categoryLabelFromItem(item: PosMenuDTO["items"][number]): string {
@@ -14,6 +13,8 @@ function categoryLabelFromItem(item: PosMenuDTO["items"][number]): string {
 }
 
 export function App() {
+  const navigate = useNavigate();
+
   const [menu, setMenu] = useState<PosMenuDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,8 +26,16 @@ export function App() {
 
   const [lastReceiptOpen, setLastReceiptOpen] = useState(false);
 
-  type OrderLine = { id: string; title: string; priceCents: number; qty: number };
-  const [order, setOrder] = useState<OrderLine[]>([]);
+  const {
+    currentOrderId,
+    getCurrentOrder,
+    addLine,
+    removeLine,
+    clearCurrentOrder,
+    getItemsCount,
+    getTotalCents,
+    getLastPaidOrder,
+  } = useOrders();
 
   useEffect(() => {
     const ac = new AbortController();
@@ -71,24 +80,17 @@ export function App() {
     return items;
   }, [menu, activeCategory, search]);
 
-  const totalCents = useMemo(() => order.reduce((sum, l) => sum + l.qty * l.priceCents, 0), [order]);
-  const itemsCount = useMemo(() => order.reduce((sum, l) => sum + l.qty, 0), [order]);
+  const currentOrder = getCurrentOrder();
+  const totalCents = getTotalCents(currentOrderId);
+  const itemsCount = getItemsCount(currentOrderId);
+
+  const lastPaid = getLastPaidOrder();
 
   function addItemToOrder(item: PosMenuDTO["items"][number]) {
     const id = item.id;
     const title = item.variant ? item.variant.name : item.product.name;
     const priceCents = item.priceCents;
-    setOrder((prev) => {
-      const existing = prev.find((l) => l.id === id);
-      if (existing) {
-        return prev.map((l) => (l.id === id ? { ...l, qty: l.qty + 1 } : l));
-      }
-      return [...prev, { id, title, priceCents, qty: 1 }];
-    });
-  }
-
-  function removeLine(id: string) {
-    setOrder((prev) => prev.filter((l) => l.id !== id));
+    addLine(id, title, priceCents, 1);
   }
 
   const statusClass = loading ? "loading" : error ? "error" : "ready";
@@ -108,12 +110,9 @@ export function App() {
         </div>
       </header>
 
-      <div className="container">
+      <div className="container pos-with-bottombar">
         <div className="mobile-tabs">
-          <button
-            className={`tab ${mobileTab === "producten" ? "active" : ""}`}
-            onClick={() => setMobileTab("producten")}
-          >
+          <button className={`tab ${mobileTab === "producten" ? "active" : ""}`} onClick={() => setMobileTab("producten")}>
             Producten
           </button>
           <button className={`tab ${mobileTab === "bon" ? "active" : ""}`} onClick={() => setMobileTab("bon")}>
@@ -162,9 +161,8 @@ export function App() {
             </div>
           </section>
 
-          {/* Right column: bon + keypad */}
+          {/* Right column: bon + actions */}
           <aside className="pos-right">
-            {/* Right panel header */}
             <div className="bon-header">
               <div className="bon-header-top">
                 <div className="bon-title">Bon</div>
@@ -187,43 +185,70 @@ export function App() {
               </div>
             </div>
 
-            <div className={`order-list ${order.length === 0 ? "empty" : ""}`}>
-              {order.length === 0 ? (
+            <div className={`order-list ${currentOrder.lines.length === 0 ? "empty" : ""}`}>
+              {currentOrder.lines.length === 0 ? (
                 <div>Nog geen items</div>
               ) : (
-                order.map((l) => (
+                currentOrder.lines.map((l) => (
                   <div key={l.id} className="order-line">
                     <div className="order-line-title">{l.title}</div>
                     <div className="order-line-meta">
                       <span className="qty">{l.qty}×</span>
                       <span className="line-total">{formatEuro(l.qty * l.priceCents)}</span>
                     </div>
-                    <button className="order-line-remove" onClick={() => removeLine(l.id)}>×</button>
+                    <button className="order-line-remove" onClick={() => removeLine(l.id)}>
+                      ×
+                    </button>
                   </div>
                 ))
               )}
             </div>
 
             <div className="actions">
-              <div className="numpad">
-                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "C", "←"].map((k) => (
-                  <button key={k} className="numkey" onClick={() => console.log("num", k)}>
-                    {k}
-                  </button>
-                ))}
-              </div>
-
               <div className="action-buttons">
-                <button className="btn danger" onClick={() => console.log("abort")}>
+                <button className="btn danger" onClick={clearCurrentOrder}>
                   Breek af
                 </button>
-                <button className="btn success" onClick={() => console.log("pay")}>
+                <button
+                  className="btn success"
+                  onClick={() => navigate("/checkout", { state: { orderId: currentOrderId } })}
+                  disabled={currentOrder.lines.length === 0}
+                >
                   Betaal
                 </button>
               </div>
             </div>
           </aside>
         </div>
+      </div>
+
+      {/* POS Bottom Bar */}
+      <div className="pos-bottombar">
+        <button className="bar-btn" onClick={() => navigate("/orders")}>
+          Bestellingen
+        </button>
+
+        <button className="bar-btn" onClick={() => setLastReceiptOpen(true)}>
+          Laatste bon
+        </button>
+
+        <button
+          className="bar-btn"
+          onClick={() => {
+            if (!lastPaid) {
+              console.log("no-last-paid");
+              setLastReceiptOpen(true);
+              return;
+            }
+            console.log("print-last", lastPaid.id);
+          }}
+        >
+          Print laatste bon
+        </button>
+
+        <button className="bar-btn ghost" disabled title="Volgende fase">
+          KDS
+        </button>
       </div>
 
       {/* Laatste bon modal */}
@@ -243,14 +268,47 @@ export function App() {
             </div>
 
             <div className="modal-body">
-              <p>Nog geen bon beschikbaar.</p>
+              {!lastPaid ? (
+                <p>Nog geen bon beschikbaar.</p>
+              ) : (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div style={{ fontWeight: 900 }}>Bon #{lastPaid.id.slice(-6)}</div>
+                  <div style={{ color: "#6b7280", fontSize: 12 }}>
+                    {new Date(lastPaid.paidAt ?? lastPaid.createdAt).toLocaleString("nl-NL")}
+                  </div>
+
+                  <div style={{ borderTop: "1px dashed #e5e7eb", paddingTop: 8, display: "grid", gap: 6 }}>
+                    {lastPaid.lines.slice(0, 8).map((l) => (
+                      <div key={l.id} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                        <span>{l.title}</span>
+                        <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{l.qty}×</span>
+                      </div>
+                    ))}
+                    {lastPaid.lines.length > 8 && (
+                      <div style={{ color: "#6b7280", fontSize: 12 }}>+ {lastPaid.lines.length - 8} regels</div>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6 }}>
+                    <span style={{ color: "#6b7280" }}>Totaal</span>
+                    <span style={{ fontWeight: 900 }}>{formatEuro(lastPaid.lines.reduce((s, l) => s + l.qty * l.priceCents, 0))}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="modal-footer">
               <button className="btn" onClick={() => setLastReceiptOpen(false)}>
                 Sluiten
               </button>
-              <button className="btn primary" onClick={() => console.log("print-last-receipt")}>
+              <button
+                className="btn primary"
+                onClick={() => {
+                  if (!lastPaid) return;
+                  console.log("print-last-receipt", lastPaid.id);
+                }}
+                disabled={!lastPaid}
+              >
                 Print
               </button>
             </div>

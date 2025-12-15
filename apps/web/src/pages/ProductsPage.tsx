@@ -8,6 +8,8 @@ import {
 } from "../api/pos/products";
 import { apiListCategories, type CategoryDTO } from "../api/pos/categories";
 import { apiListProductGroups, type ProductGroupDTO } from "../api/pos/product-groups";
+import { apiListVatRates, type VatRateDTO } from "../api/pos/vatRates";
+import { apiListVariants, apiCreateVariant, apiUpdateVariant, apiDeleteVariant, type VariantDTO } from "../api/pos/variants";
 
 function formatEuroFromCents(cents: number): string {
   try {
@@ -39,6 +41,15 @@ export default function ProductsPage() {
   const [formCategoryId, setFormCategoryId] = useState<string>("");
   const [formProductGroupId, setFormProductGroupId] = useState<string>("");
   const [formIsActive, setFormIsActive] = useState<boolean>(true);
+  const [formVatRateId, setFormVatRateId] = useState<string>("");
+  const [vatRates, setVatRates] = useState<VatRateDTO[]>([]);
+  const [variantsOpen, setVariantsOpen] = useState(false);
+  const [variants, setVariants] = useState<VariantDTO[]>([]);
+  const [variantFormName, setVariantFormName] = useState("");
+  const [variantFormPrice, setVariantFormPrice] = useState("");
+  const [variantFormSort, setVariantFormSort] = useState<number>(0);
+  const [variantFormActive, setVariantFormActive] = useState<boolean>(true);
+  const [variantEditId, setVariantEditId] = useState<string | null>(null);
 
   const { openCreate, openEdit, closeModal } = useModalState(
     setOpen,
@@ -47,7 +58,8 @@ export default function ProductsPage() {
     setFormEuro,
     setFormCategoryId,
     setFormProductGroupId,
-    setFormIsActive
+    setFormIsActive,
+    setFormVatRateId
   );
 
   async function onSave() {
@@ -58,19 +70,13 @@ export default function ProductsPage() {
         isActive: formIsActive,
         categoryId: formCategoryId || null,
         productGroupId: formProductGroupId || null,
+        vatRateId: formVatRateId || null,
       };
       if (!payload.name) {
         alert("Naam is verplicht");
         return;
       }
-      if (!payload.categoryId) {
-        alert("Categorie is verplicht");
-        return;
-      }
-      if (!payload.productGroupId) {
-        alert("Productgroep is verplicht");
-        return;
-      }
+      // Categorie en productgroep zijn optioneel; stuur null indien leeg
       if (editing) {
         await apiUpdateProduct(editing.id, payload);
       } else {
@@ -99,7 +105,7 @@ export default function ProductsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [p, c, pg] = await Promise.all([
+      const [p, c, pg, vr] = await Promise.all([
         apiListProducts(),
         apiListCategories(),
         apiListProductGroups().catch((err) => {
@@ -107,14 +113,104 @@ export default function ProductsPage() {
           alert("Productgroepen konden niet geladen worden (API ontbreekt of fout).");
           return [] as ProductGroupDTO[];
         }),
+        apiListVatRates().catch(() => [] as VatRateDTO[]),
       ]);
       setProducts(p || []);
       setCategories(c || []);
       setProductGroups(pg || []);
+      setVatRates(vr || []);
     } catch (e: any) {
       setError(e?.message || "Kon gegevens niet laden");
     } finally {
       setLoading(false);
+    }
+  }
+  async function openVariantsModal(p: Product) {
+    try {
+      setVariantEditId(null);
+      setVariantFormName("");
+      setVariantFormPrice("");
+      setVariantFormSort(0);
+      setVariantFormActive(true);
+      setEditing(p);
+      const list = await apiListVariants(p.id);
+      const maxSort = list.reduce((m, v) => Math.max(m, v.sortOrder ?? 0), 0);
+      setVariantFormSort(list.length ? maxSort + 1 : 0);
+      setVariants(list);
+      setVariantsOpen(true);
+    } catch (err) {
+      console.error("openVariantsModal", err);
+      alert("Kon varianten niet laden. Bekijk console voor details.");
+    }
+  }
+
+  function closeVariantsModal() {
+    setVariantsOpen(false);
+    setEditing(null);
+  }
+
+  async function saveVariant() {
+    if (!editing) return;
+    try {
+      const name = variantFormName.trim();
+      if (!name) {
+        alert("Naam is verplicht voor variant");
+        return;
+      }
+      const payload: any = {
+        productId: editing.id,
+        name,
+        isActive: Boolean(variantFormActive),
+      };
+      if (Number.isFinite(variantFormSort)) {
+        payload.sortOrder = Math.trunc(variantFormSort as number);
+      }
+      const priceCents = parseEuroToCentsOptional(variantFormPrice);
+      if (priceCents !== undefined) {
+        payload.priceOverrideCents = priceCents;
+      }
+      if (variantEditId) {
+        await apiUpdateVariant(variantEditId, payload);
+      } else {
+        await apiCreateVariant(payload);
+      }
+      const list = await apiListVariants(editing.id);
+      setVariants(list);
+      setVariantEditId(null);
+      setVariantFormName("");
+      setVariantFormPrice("");
+      const maxSort = list.reduce((m, v) => Math.max(m, v.sortOrder ?? 0), 0);
+      setVariantFormSort(list.length ? maxSort + 1 : 0);
+      setVariantFormActive(true);
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error("saveVariant error", {
+        error: err?.message || err,
+        response: err?.response?.data,
+      });
+      alert("Kon variant niet opslaan. Bekijk console voor details.");
+    }
+  }
+
+  async function editVariant(v: VariantDTO) {
+    setVariantEditId(v.id);
+    setVariantFormName(v.name);
+    setVariantFormPrice(v.priceOverrideCents != null ? (v.priceOverrideCents / 100).toFixed(2).replace(".", ",") : "");
+    setVariantFormSort(v.sortOrder ?? 0);
+    setVariantFormActive(v.isActive);
+  }
+
+  async function deleteVariant(v: VariantDTO) {
+    if (!confirm(`Verwijder variant: ${v.name}?`)) return;
+    try {
+      await apiDeleteVariant(v.id);
+      if (editing) {
+        const list = await apiListVariants(editing.id);
+        setVariants(list);
+      }
+    } catch (err) {
+      console.error("deleteVariant", err);
+      alert("Kon variant niet verwijderen. Bekijk console voor details.");
     }
   }
 
@@ -204,6 +300,7 @@ export default function ProductsPage() {
                 <th style={th}>Productgroep</th>
                 <th style={th}>Prijs</th>
                 <th style={th}>Status</th>
+                <th style={th}>Varianten</th>
                 <th style={th}>Acties</th>
               </tr>
             </thead>
@@ -218,6 +315,9 @@ export default function ProductsPage() {
                   <td style={td}>{p.productGroup?.name ?? "—"}</td>
                   <td style={td}>{formatEuroFromCents(p.basePriceCents)}</td>
                   <td style={td}>{p.isActive ? "Actief" : "Inactief"}</td>
+                  <td style={td}>
+                    <button onClick={() => openVariantsModal(p)} style={btnNeutral}>Varianten</button>
+                  </td>
                   <td style={td}>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button onClick={() => openEdit(p)} style={btnNeutral}>
@@ -290,11 +390,95 @@ export default function ProductsPage() {
                 <input type="checkbox" checked={formIsActive} onChange={(e) => setFormIsActive(e.target.checked)} />
                 Actief
               </label>
+
+              <label style={labelRow}>
+                <span>BTW (override)</span>
+                <select value={formVatRateId} onChange={(e) => setFormVatRateId(e.target.value)}>
+                  <option value="">— erven van productgroep —</option>
+                  {vatRates.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
               <button onClick={closeModal}>Annuleer</button>
               <button onClick={onSave} style={btnPrimary}>Opslaan</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {variantsOpen && editing && (
+        <div style={modalOverlay}>
+          <div style={modalBody} role="dialog" aria-modal="true" aria-label={`Varianten voor ${editing.name}`}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700 }}>Varianten: {editing.name}</h2>
+              <button onClick={closeVariantsModal} aria-label="Sluiten">✕</button>
+            </div>
+            {variants.length === 0 ? (
+              <div>Geen varianten.</div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={th}>Naam</th>
+                      <th style={th}>Prijs override</th>
+                      <th style={th}>Sort</th>
+                      <th style={th}>Status</th>
+                      <th style={th}>Acties</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {variants
+                      .slice()
+                      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name, "nl"))
+                      .map((v) => (
+                        <tr key={v.id}>
+                          <td style={td}>{v.name}</td>
+                          <td style={td}>{v.priceOverrideCents != null ? formatEuroFromCents(v.priceOverrideCents) : "—"}</td>
+                          <td style={td}>{v.sortOrder ?? 0}</td>
+                          <td style={td}>{v.isActive ? "Actief" : "Inactief"}</td>
+                          <td style={td}>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button onClick={() => editVariant(v)} style={btnNeutral}>Bewerk</button>
+                              <button onClick={() => deleteVariant(v)} style={btnDanger}>Verwijder</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div style={{ marginTop: 12 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>{variantEditId ? "Variant bewerken" : "Nieuwe variant"}</h3>
+              <div style={{ display: "grid", gap: 10 }}>
+                <label style={labelRow}>
+                  <span>Naam</span>
+                  <input value={variantFormName} onChange={(e) => setVariantFormName(e.target.value)} placeholder="Naam" />
+                </label>
+                <label style={labelRow}>
+                  <span>Prijs override (EUR)</span>
+                  <input value={variantFormPrice} onChange={(e) => setVariantFormPrice(e.target.value)} placeholder="" inputMode="decimal" />
+                </label>
+                <label style={labelRow}>
+                  <span>Sort</span>
+                  <input type="number" value={variantFormSort} onChange={(e) => setVariantFormSort(Number(e.target.value) || 0)} />
+                </label>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={variantFormActive} onChange={(e) => setVariantFormActive(e.target.checked)} />
+                  Actief
+                </label>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+                <button onClick={() => { setVariantEditId(null); setVariantFormName(""); setVariantFormPrice(""); }}>
+                  Reset
+                </button>
+                <button onClick={saveVariant} style={btnPrimary}>Opslaan variant</button>
+              </div>
             </div>
           </div>
         </div>
@@ -383,6 +567,16 @@ function parseEuroToCents(input: string): number {
   return 0;
 }
 
+// Returns undefined when empty/invalid, otherwise integer cents
+function parseEuroToCentsOptional(input: string): number | undefined {
+  const trimmed = (input || "").trim();
+  if (!trimmed) return undefined;
+  const norm = trimmed.replace(/\s+/g, "").replace(/,/g, ".");
+  const v = Number(norm);
+  if (!Number.isFinite(v)) return undefined;
+  return Math.round(v * 100);
+}
+
 // Modal helpers
 function useModalState(
   setOpen: (v: boolean) => void,
@@ -391,7 +585,8 @@ function useModalState(
   setFormEuro: (v: string) => void,
   setFormCategoryId: (v: string) => void,
   setFormProductGroupId: (v: string) => void,
-  setFormIsActive: (v: boolean) => void
+  setFormIsActive: (v: boolean) => void,
+  setFormVatRateId: (v: string) => void
 ) {
   function openCreate() {
     setEditing(null);
@@ -400,6 +595,7 @@ function useModalState(
     setFormCategoryId("");
     setFormProductGroupId("");
     setFormIsActive(true);
+    setFormVatRateId("");
     setOpen(true);
   }
   function openEdit(p: Product) {
@@ -409,6 +605,7 @@ function useModalState(
     setFormCategoryId(p.category?.id ?? "");
     setFormProductGroupId(p.productGroup?.id ?? "");
     setFormIsActive(p.isActive);
+    setFormVatRateId("");
     setOpen(true);
   }
   function closeModal() {
@@ -419,8 +616,8 @@ function useModalState(
 
 // attach modal helpers to component scope
 function _bindModalHelpers(ctx: any) {
-  const { setOpen, setEditing, setFormName, setFormEuro, setFormCategoryId, setFormProductGroupId, setFormIsActive } = ctx;
-  return useModalState(setOpen, setEditing, setFormName, setFormEuro, setFormCategoryId, setFormProductGroupId, setFormIsActive);
+  const { setOpen, setEditing, setFormName, setFormEuro, setFormCategoryId, setFormProductGroupId, setFormIsActive, setFormVatRateId } = ctx;
+  return useModalState(setOpen, setEditing, setFormName, setFormEuro, setFormCategoryId, setFormProductGroupId, setFormIsActive, setFormVatRateId);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

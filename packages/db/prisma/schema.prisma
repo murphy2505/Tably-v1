@@ -147,6 +147,7 @@ model ProductVariant {
   tenantId  String
   productId String
   name      String
+  priceOverrideCents Int?
   sortOrder Int     @default(0)
   isActive  Boolean @default(true)
 
