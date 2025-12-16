@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import { asyncHandler, validationError, notFound } from "../../lib/http";
 import { prisma } from "../../lib/prisma";
 import { z } from "zod";
+import { resolveModifiersForProduct } from "../modifiers/controller";
 
 export const ordersRouter = Router();
 
@@ -94,34 +95,91 @@ ordersRouter.post("/core/orders", asyncHandler(async (req, res) => {
 ordersRouter.post("/core/orders/:id/lines", asyncHandler(async (req, res) => {
   const tenantId = req.header("x-tenant-id");
   if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+  if (!prisma) {
+    console.error("[API MISCONFIG] Prisma missing", { route: req.originalUrl, tenantId });
+    return res.status(500).json({ error: { message: "SERVER_MISCONFIG" } });
+  }
 
   const id = String(req.params.id);
   const existing = await prisma.order.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
 
-  const Body = z.object({ productId: z.string(), qty: z.number().int().positive().optional() });
+  const Body = z.object({ productId: z.string(), variantId: z.string().nullable().optional(), qty: z.number().int().positive().optional(), selectedOptionIds: z.array(z.string()).optional() });
   const parsed = Body.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
-  const { productId, qty = 1 } = parsed.data;
+  const { productId, variantId = null, qty = 1, selectedOptionIds = [] } = parsed.data;
 
   // fetch product price
   const product = await prisma.product.findFirst({ where: { id: productId, tenantId } });
-  if (!product) return notFound(res);
-  const priceCents = product.basePriceCents;
+  if (!product) return validationError(res, [{ path: ["productId"], message: "Onbekend product" }]);
+  let priceCents = product.basePriceCents;
+    // Sort selected options deterministically and build signature
+    const selectedOptionIdsSorted = [...selectedOptionIds].sort();
+    const modifierSignature = selectedOptionIdsSorted.join(",");
+  // Resolve attached modifier groups and validate selections
+  const groups = await resolveModifiersForProduct(tenantId, productId);
+  const selectedSet = new Set(selectedOptionIds);
+  const snapshotGroups: any[] = [];
+  let deltaCentsTotal = 0;
+  // Build map optionId -> option for quick lookup
+  const optionsMap = new Map<string, { id: string; name: string; priceDeltaCents: number }>();
+  for (const g of groups) {
+    for (const opt of g.options) {
+      optionsMap.set(opt.id, { id: opt.id, name: opt.name, priceDeltaCents: opt.priceDeltaCents });
+    }
+  }
+  for (const g of groups) {
+    const chosen: { optionId: string; name: string; deltaCents: number }[] = [];
+    for (const opt of g.options) {
+      if (selectedSet.has(opt.id)) {
+        chosen.push({ optionId: opt.id, name: opt.name, deltaCents: opt.priceDeltaCents });
+      }
+    }
+    // Validate min/max per group
+    if (chosen.length < (g.minSelect ?? 0)) {
+      return validationError(res, [{ path: ["selectedOptionIds"], message: `MIN_SELECT_NOT_MET:${g.name}:${g.minSelect}` }]);
+    }
+    if (g.maxSelect !== null && g.maxSelect !== undefined && chosen.length > g.maxSelect) {
+      return validationError(res, [{ path: ["selectedOptionIds"], message: `MAX_SELECT_EXCEEDED:${g.name}:${g.maxSelect}` }]);
+    }
+    const groupSnap = { groupId: g.id, name: g.name, min: g.minSelect, max: g.maxSelect, selected: chosen };
+    snapshotGroups.push(groupSnap);
+    for (const c of chosen) deltaCentsTotal += c.deltaCents;
+  }
+  priceCents = priceCents + deltaCentsTotal;
 
   // check if a line for product exists (by title or productId—schema lacks productId on OrderLine)
   // We'll match on title (product name); if exists, update qty; else create
   const title = product.name;
-  const line = await prisma.orderLine.findFirst({ where: { orderId: id, tenantId, title } });
-  if (line) {
-    await prisma.orderLine.update({ where: { id: line.id }, data: { qty: line.qty + qty } });
+  // No DB fields yet for product/variant/signature; merge by in-memory signature
+  // Strategy: fetch lines with same title and pick the one whose computed signature matches
+  const sameTitleLines = await prisma.orderLine.findMany({ where: { orderId: id, tenantId, title } });
+  function computeLineSignature(l: any): string {
+    const groups = (l?.modifiers as any)?.groups ?? [];
+    const ids: string[] = [];
+    for (const g of groups) {
+      const selected = g?.selected ?? [];
+      for (const s of selected) {
+        if (typeof s?.optionId === "string") ids.push(s.optionId);
+      }
+    }
+    return ids.sort().join(",");
+  }
+  const match = sameTitleLines.find((l) => computeLineSignature(l) === modifierSignature);
+  if (match) {
+    await prisma.orderLine.update({ where: { id: match.id }, data: { qty: match.qty + qty } });
   } else {
-    await prisma.orderLine.create({ data: { tenantId, orderId: id, title, qty, priceCents } });
+    await prisma.orderLine.create({ data: { tenantId, orderId: id, title, qty, priceCents, modifiers: { groups: snapshotGroups, deltaCentsTotal } as any } });
   }
 
   const order = await prisma.order.findFirst({ where: { id, tenantId }, include: { lines: true } });
+  // lines is always an array due to include; enforce shape
   return res.json({ order });
 }));
+
+// Smoke test scenario (comments):
+// - Adding Friet + Mayo and Friet + Speciaal must produce 2 separate lines (not qty 2 on one line)
+// - No DB migration yet; merge decision uses in-memory signature derived from line.modifiers
 // List orders (tenant-scoped)
 ordersRouter.get("/core/orders", asyncHandler(async (req, res) => {
   const tenantId = req.header("x-tenant-id");

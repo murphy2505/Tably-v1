@@ -176,6 +176,55 @@ model ProductVariant {
   @@index([tenantId, productId, sortOrder])
 }
 
+// New: Modifiers MVP
+model ModifierGroup {
+  id        String @id @default(cuid())
+  tenantId  String
+  name      String
+  minSelect Int    @default(0)
+  maxSelect Int    @default(1)
+  isActive  Boolean @default(true)
+  sortOrder Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  options ModifierOption[]
+  products ProductModifierGroup[]
+
+  @@index([tenantId, isActive, sortOrder])
+}
+
+model ModifierOption {
+  id        String @id @default(cuid())
+  tenantId  String
+  groupId   String
+  name      String
+  priceDeltaCents Int @default(0)
+  isActive  Boolean @default(true)
+  sortOrder Int @default(0)
+
+  group ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, groupId, isActive, sortOrder])
+}
+
+model ProductModifierGroup {
+  id        String @id @default(cuid())
+  tenantId  String
+  productId String
+  groupId   String
+  sortOrder Int @default(0)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  group   ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, productId, groupId])
+  @@index([tenantId, productId, sortOrder])
+}
+
 model Menu {
   id         String  @id @default(cuid())
   tenantId   String
@@ -307,6 +356,7 @@ model OrderLine {
   title     String
   qty       Int
   priceCents Int
+  modifiers Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt

@@ -7,6 +7,8 @@ import LastReceiptTrigger from "./components/LastReceiptTrigger";
 import { fetchActivePosMenu } from "./api/pos";
 import type { PosMenuDTO } from "./types/pos";
 import { useKds } from "./stores/kdsStore";
+import { apiGetProductModifierGroups } from "./api/pos/modifiers";
+import ModifierSheet from "./components/pos/ModifierSheet";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -114,6 +116,10 @@ export function App() {
     }
   }
 
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetProduct, setSheetProduct] = useState<{ id: string; name: string; priceCents: number } | null>(null);
+  const [sheetGroups, setSheetGroups] = useState<Array<{ id: string; name: string; minSelect: number; maxSelect: number; options: { id: string; name: string; priceDeltaCents: number }[] }>>([]);
+
   async function addItemToOrder(item: PosMenuDTO["items"][number]) {
     try {
       let targetOrderId = activeOrderId;
@@ -125,6 +131,19 @@ export function App() {
         syncLocalStoreFromOrder(created);
       }
       const pid = item.product.id; // product id
+      // Check modifiers
+      try {
+        const resp = await apiGetProductModifierGroups(pid);
+        const groups = resp.groups || [];
+        if (groups.length > 0) {
+          setSheetProduct({ id: pid, name: item.product.name, priceCents: item.priceCents });
+          setSheetGroups(groups);
+          setSheetOpen(true);
+          return; // wait for confirm
+        }
+      } catch (_e) {
+        // If fetching modifiers fails, fall back to instant add
+      }
       const updated = await apiAddOrderLine(targetOrderId!, pid, 1);
       setActiveOrder(updated);
       syncLocalStoreFromOrder(updated);
@@ -359,6 +378,27 @@ export function App() {
           </span>
         </button>
       </div>
+
+      {/* Modifiers bottom sheet */}
+      {sheetProduct && (
+        <ModifierSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          product={sheetProduct}
+          groups={sheetGroups}
+          onConfirm={async (selectedOptionIds) => {
+            setSheetOpen(false);
+            if (!activeOrderId) return;
+            try {
+              const updated = await apiAddOrderLine(activeOrderId, sheetProduct.id, 1, selectedOptionIds);
+              setActiveOrder(updated);
+              syncLocalStoreFromOrder(updated);
+            } catch (e) {
+              console.warn("add with modifiers failed", e);
+            }
+          }}
+        />
+      )}
 
     </div>
   );

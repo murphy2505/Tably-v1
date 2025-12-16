@@ -35,6 +35,9 @@ async function main() {
   await prisma.menuCardItem.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
   await prisma.menuCardSchedule.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
   await prisma.menuCard.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
+  await prisma.productModifierGroup.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
+  await prisma.modifierOption.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
+  await prisma.modifierGroup.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
 
   // VatRates (seed idempotent via upsert)
   // 0% is used for emballage/statiegeld/doorbelasting.
@@ -284,6 +287,30 @@ async function main() {
       },
     });
   }
+
+  // Modifiers: Sauzen group with options, attach to Friet
+  const grpSauzen = await prisma.modifierGroup.create({
+    data: {
+      tenantId: DEFAULT_TENANT_ID,
+      name: "Sauzen",
+      minSelect: 0,
+      maxSelect: 1,
+      sortOrder: 1,
+      isActive: true,
+    },
+  });
+  const optMayo = await prisma.modifierOption.create({
+    data: { tenantId: DEFAULT_TENANT_ID, groupId: grpSauzen.id, name: "Mayo", priceDeltaCents: 0, sortOrder: 1, isActive: true },
+  });
+  const optCurry = await prisma.modifierOption.create({
+    data: { tenantId: DEFAULT_TENANT_ID, groupId: grpSauzen.id, name: "Curry", priceDeltaCents: 0, sortOrder: 2, isActive: true },
+  });
+  const optSpeciaal = await prisma.modifierOption.create({
+    data: { tenantId: DEFAULT_TENANT_ID, groupId: grpSauzen.id, name: "Speciaal", priceDeltaCents: 50, sortOrder: 3, isActive: true },
+  });
+  await prisma.productModifierGroup.create({
+    data: { tenantId: DEFAULT_TENANT_ID, productId: pFriet.id, groupId: grpSauzen.id, sortOrder: 1 },
+  });
 
   console.log("Seed complete for tenant:", DEFAULT_TENANT_ID);
 

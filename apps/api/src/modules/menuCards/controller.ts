@@ -75,6 +75,10 @@ export async function listMenuCards(req: Request, res: Response) {
 
 export async function activeMenuCards(req: Request, res: Response) {
   try {
+    if (!prisma || typeof (prisma as any).menuCard?.findMany !== "function") {
+      console.error("[menuCards] prisma missing on req", { hasTenant: !!(req as any).tenantId });
+      return res.status(500).json({ error: { message: "SERVER_MISCONFIG" } });
+    }
     const tenantId = getTenantIdFromRequest(req);
     const channel = (req.query.channel as string) || "POS";
     const atIso = (req.query.at as string) || undefined;

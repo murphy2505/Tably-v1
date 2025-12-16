@@ -363,7 +363,12 @@ export async function listProducts(req: Request, res: Response) {
     const where: any = { tenantId };
     if (isActive !== undefined) where.isActive = isActive;
 
-    const data = await prisma.product.findMany({
+    if (!prisma) {
+      console.error("[API MISCONFIG] Prisma missing", { route: req.originalUrl, tenantId });
+      return res.status(500).json({ error: { message: "SERVER_MISCONFIG" } });
+    }
+
+    const rows = await prisma.product.findMany({
       where,
       orderBy: { [field]: order } as any,
       include: {
@@ -373,7 +378,10 @@ export async function listProducts(req: Request, res: Response) {
       },
     });
 
-    return res.json({ data });
+    if (process.env.DEBUG_API === "1") {
+      console.log("[catalog.products]", { tenantId, count: rows.length });
+    }
+    return res.json({ products: rows });
   } catch (err) {
     console.error("listProducts error", err);
     return res.status(500).json({ error: { message: "INTERNAL_ERROR" } });
