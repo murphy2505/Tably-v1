@@ -6,6 +6,7 @@ import AppShell from "./app/AppShell";
 import { App as PosView } from "./App";
 import { OrdersProvider } from "./stores/ordersStore";
 import { PosSessionProvider } from "./stores/posSessionStore";
+import { KdsProvider, useKds } from "./stores/kdsStore";
 
 /* Assortiment */
 import ProductsPage from "./pages/ProductsPage";
@@ -26,11 +27,19 @@ import Settings from "./pages/Settings";
 
 const root = createRoot(document.getElementById("root")!);
 
+function KdsBoot() {
+  const { start } = useKds();
+  // start once on mount
+  return (start(), null);
+}
+
 root.render(
   <StrictMode>
     <BrowserRouter>
       <PosSessionProvider>
         <OrdersProvider>
+          <KdsProvider>
+            <KdsBoot />
           <Routes>
           <Route path="/" element={<AppShell />}>
             <Route index element={<Navigate to="/pos" replace />} />
@@ -61,6 +70,7 @@ root.render(
             <Route path="*" element={<Navigate to="/pos" replace />} />
           </Route>
           </Routes>
+          </KdsProvider>
         </OrdersProvider>
       </PosSessionProvider>
     </BrowserRouter>
