@@ -24,6 +24,7 @@ import KdsScreen from "./pages/KdsScreen";
 import Loyalty from "./pages/Loyalty";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import WebshopStatusDemo from "./pages/WebshopStatusDemo";
 
 const root = createRoot(document.getElementById("root")!);
 
@@ -66,6 +67,7 @@ root.render(
             <Route path="loyalty" element={<Loyalty />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="web" element={<WebshopStatusDemo />} />
 
             <Route path="*" element={<Navigate to="/pos" replace />} />
           </Route>

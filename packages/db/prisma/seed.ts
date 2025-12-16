@@ -31,6 +31,7 @@ async function main() {
   await prisma.productGroup.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
   await prisma.revenueGroup.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
   await prisma.vatRate.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
+  await prisma.tenantSettings.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
   await prisma.menuCardItem.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
   await prisma.menuCardSchedule.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
   await prisma.menuCard.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
@@ -285,6 +286,29 @@ async function main() {
   }
 
   console.log("Seed complete for tenant:", DEFAULT_TENANT_ID);
+
+  // Webshop tenant settings default: simple hours, no closures
+  const openingHours = {
+    days: {
+      "0": [{ start: "11:30", end: "20:00" }],
+      "1": [{ start: "11:30", end: "20:00" }],
+      "2": [{ start: "11:30", end: "20:00" }],
+      "3": [{ start: "11:30", end: "20:00" }],
+      "4": [{ start: "11:30", end: "21:00" }],
+      "5": [{ start: "11:30", end: "21:00" }],
+      "6": [{ start: "11:30", end: "21:00" }],
+    },
+  } as any;
+  await prisma.tenantSettings.create({
+    data: {
+      tenantId: DEFAULT_TENANT_ID,
+      webshopEnabled: true,
+      webshopTimezone: "Europe/Amsterdam",
+      openingHours,
+      closures: [],
+      messageClosed: "Momenteel gesloten",
+    },
+  });
 }
 
 main()
