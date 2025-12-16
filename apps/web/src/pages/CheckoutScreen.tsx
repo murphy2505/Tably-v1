@@ -1,7 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useOrders } from "../stores/ordersStore";
-import LastReceiptTrigger from "../components/LastReceiptTrigger";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -183,7 +182,6 @@ export default function CheckoutScreen() {
 
           <div className="pay-actions-sticky">
             <button className="btn danger" onClick={onAbort}>Breek af</button>
-            <LastReceiptTrigger variant="bottombar" />
             <button
               className="btn primary"
               onClick={view === "CHECKOUT_COMPLETE" ? onDone : onConfirm}

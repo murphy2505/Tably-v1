@@ -25,8 +25,6 @@ export function App() {
   const [compact, setCompact] = useState(false);
   const [mobileTab, setMobileTab] = useState<"producten" | "bon">("producten");
 
-  const [lastReceiptOpen, setLastReceiptOpen] = useState(false);
-
   const {
     currentOrderId,
     getCurrentOrder,
@@ -169,8 +167,6 @@ export function App() {
                 <div className="bon-title">Bon</div>
                 <div className="bon-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span className={`status-chip ${statusClass}`}>{statusLabel}</span>
-                  {/** Last receipt trigger in header */}
-                  <LastReceiptTrigger variant="header" />
                 </div>
               </div>
 
@@ -228,9 +224,7 @@ export function App() {
           Bestellingen
         </button>
 
-        <button className="bar-btn" onClick={() => setLastReceiptOpen(true)}>
-          Laatste bon
-        </button>
+        <LastReceiptTrigger variant="bottombar" />
 
         <button
           className="bar-btn"
@@ -251,70 +245,6 @@ export function App() {
         </button>
       </div>
 
-      {/* Laatste bon modal */}
-      {lastReceiptOpen && (
-        <div
-          className="modal-overlay"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setLastReceiptOpen(false);
-          }}
-        >
-          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="modal-title">Laatste bon</div>
-              <button className="modal-close" onClick={() => setLastReceiptOpen(false)}>
-                Sluiten
-              </button>
-            </div>
-
-            <div className="modal-body">
-              {!lastPaid ? (
-                <p>Nog geen bon beschikbaar.</p>
-              ) : (
-                <div style={{ display: "grid", gap: 8 }}>
-                  <div style={{ fontWeight: 900 }}>Bon #{lastPaid.id.slice(-6)}</div>
-                  <div style={{ color: "#6b7280", fontSize: 12 }}>
-                    {new Date(lastPaid.paidAt ?? lastPaid.createdAt).toLocaleString("nl-NL")}
-                  </div>
-
-                  <div style={{ borderTop: "1px dashed #e5e7eb", paddingTop: 8, display: "grid", gap: 6 }}>
-                    {lastPaid.lines.slice(0, 8).map((l) => (
-                      <div key={l.id} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                        <span>{l.title}</span>
-                        <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{l.qty}×</span>
-                      </div>
-                    ))}
-                    {lastPaid.lines.length > 8 && (
-                      <div style={{ color: "#6b7280", fontSize: 12 }}>+ {lastPaid.lines.length - 8} regels</div>
-                    )}
-                  </div>
-
-                  <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 6 }}>
-                    <span style={{ color: "#6b7280" }}>Totaal</span>
-                    <span style={{ fontWeight: 900 }}>{formatEuro(lastPaid.lines.reduce((s, l) => s + l.qty * l.priceCents, 0))}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer">
-              <button className="btn" onClick={() => setLastReceiptOpen(false)}>
-                Sluiten
-              </button>
-              <button
-                className="btn primary"
-                onClick={() => {
-                  if (!lastPaid) return;
-                  console.log("print-last-receipt", lastPaid.id);
-                }}
-                disabled={!lastPaid}
-              >
-                Print
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
