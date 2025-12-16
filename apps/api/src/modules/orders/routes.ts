@@ -1,9 +1,26 @@
-import { Router } from "express";
+import { Router, Response } from "express";
 import { asyncHandler, validationError, notFound } from "../../lib/http";
 import { prisma } from "../../lib/prisma";
 import { z } from "zod";
 
 export const ordersRouter = Router();
+
+// Simple in-memory SSE hub per tenant
+type TenantId = string;
+type Client = { res: Response };
+const sseClients: Map<TenantId, Set<Client>> = new Map();
+
+function sseBroadcast(tenantId: string, event: string, data: any) {
+  const set = sseClients.get(tenantId);
+  if (!set || set.size === 0) return;
+  const payload = `data: ${JSON.stringify(data)}\n\n`;
+  for (const { res } of set) {
+    try {
+      res.write(`event: ${event}\n`);
+      res.write(payload);
+    } catch {}
+  }
+}
 
 const TransitionBody = z.object({ to: z.enum(["OPEN", "SENT", "IN_PREP", "READY", "COMPLETED", "CANCELLED"]) });
 
@@ -52,6 +69,8 @@ ordersRouter.post("/core/orders/:id/transition", asyncHandler(async (req, res) =
   });
 
   console.log("[order.transition]", { orderId: id, from, to });
+  // KDS broadcast: notify streams in this tenant
+  sseBroadcast(tenantId, "order", { type: "ORDER_UPDATED", orderId: id, status: updated.status, updatedAt: new Date().toISOString() });
   return res.json({ order: updated });
 }));
 
@@ -144,4 +163,59 @@ ordersRouter.get("/core/orders/:id", asyncHandler(async (req, res) => {
   const order = await prisma.order.findFirst({ where: { id, tenantId }, include: { lines: true } });
   if (!order) return notFound(res);
   return res.json({ order });
+}));
+
+// KDS: SSE stream (accepts header x-tenant-id or query tenantId for EventSource compatibility)
+ordersRouter.get("/core/kds/stream", asyncHandler(async (req, res) => {
+  const headerTenant = req.header("x-tenant-id");
+  const queryTenant = (req.query.tenantId as string | undefined) ?? undefined;
+  const tenantId = headerTenant || queryTenant;
+  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  const client: Client = { res };
+  const set = sseClients.get(tenantId) ?? new Set<Client>();
+  set.add(client);
+  sseClients.set(tenantId, set);
+
+  // Initial comment to open stream
+  res.write(`: connected tenant ${tenantId}\n\n`);
+
+  const interval = setInterval(() => {
+    try {
+      res.write(`: ping\n\n`);
+    } catch {}
+  }, 15000);
+
+  req.on("close", () => {
+    clearInterval(interval);
+    const group = sseClients.get(tenantId);
+    if (group) {
+      group.delete(client);
+      if (group.size === 0) sseClients.delete(tenantId);
+    }
+  });
+}));
+
+// KDS: helper tickets list for a single status
+ordersRouter.get("/core/kds/tickets", asyncHandler(async (req, res) => {
+  const tenantId = req.header("x-tenant-id");
+  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+
+  const status = String(req.query.status || "");
+  const valid = ["SENT", "IN_PREP", "READY"]; // Only relevant for KDS columns
+  if (!valid.includes(status)) {
+    return validationError(res, [{ path: ["status"], message: "INVALID_STATUS" }]);
+  }
+
+  const orders = await prisma.order.findMany({
+    where: { tenantId, status: status as any },
+    orderBy: { createdAt: "asc" },
+    include: { lines: true },
+  });
+  return res.json({ orders });
 }));

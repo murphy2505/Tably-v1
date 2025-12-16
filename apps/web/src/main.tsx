@@ -17,6 +17,7 @@ import AssortimentRevenueGroups from "./pages/AssortimentRevenueGroups";
 /* Core screens */
 import CheckoutScreen from "./pages/CheckoutScreen";
 import OrdersScreen from "./pages/assortiment/OrdersScreen";
+import KdsScreen from "./pages/KdsScreen";
 
 /* Other pages */
 import Loyalty from "./pages/Loyalty";
@@ -38,6 +39,7 @@ root.render(
             <Route path="pos" element={<PosView />} />
             <Route path="checkout" element={<CheckoutScreen />} />
             <Route path="orders" element={<OrdersScreen />} />
+            <Route path="kds" element={<KdsScreen />} />
 
             {/* Assortiment */}
             <Route path="assortiment">

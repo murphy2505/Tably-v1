@@ -341,7 +341,7 @@ export function App() {
 
         <LastReceiptTrigger variant="bottombar" />
 
-        <button className="bar-btn ghost" disabled title="Volgende fase">
+        <button className="bar-btn" onClick={() => navigate("/kds")}>
           KDS
         </button>
       </div>
