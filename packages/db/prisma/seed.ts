@@ -31,6 +31,9 @@ async function main() {
   await prisma.productGroup.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
   await prisma.revenueGroup.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
   await prisma.vatRate.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
+  await prisma.menuCardItem.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
+  await prisma.menuCardSchedule.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
+  await prisma.menuCard.deleteMany({ where: { tenantId: DEFAULT_TENANT_ID } });
 
   // VatRates (seed idempotent via upsert)
   // 0% is used for emballage/statiegeld/doorbelasting.
@@ -255,6 +258,28 @@ async function main() {
         sortOrder: item.sortOrder,
         isActive: true,
         courseId: item.courseId,
+      },
+    });
+  }
+
+  // MenuCard: Standaard (BOTH), no schedules -> always active
+  const card = await prisma.menuCard.create({
+    data: {
+      tenantId: DEFAULT_TENANT_ID,
+      name: "Standaard",
+      channel: "BOTH",
+      sortOrder: 1,
+      isActive: true,
+    },
+  });
+  for (const it of itemsData) {
+    await prisma.menuCardItem.create({
+      data: {
+        tenantId: DEFAULT_TENANT_ID,
+        menuCardId: card.id,
+        productId: it.productId,
+        variantId: it.variantId,
+        sortOrder: it.sortOrder,
       },
     });
   }

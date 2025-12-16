@@ -18,6 +18,12 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum MenuChannel {
+  POS
+  WEB
+  BOTH
+}
+
 model Tenant {
   id        String   @id
   name      String
@@ -223,6 +229,55 @@ model MenuItem {
   @@index([tenantId, menuId, sortOrder])
   @@index([tenantId, productId])
   @@index([tenantId, variantId])
+}
+
+// New: Menu Cards with schedules
+model MenuCard {
+  id        String      @id @default(cuid())
+  tenantId  String
+  name      String
+  channel   MenuChannel @default(BOTH)
+  isActive  Boolean     @default(true)
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @default(now()) @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schedules MenuCardSchedule[]
+  items     MenuCardItem[]
+
+  @@index([tenantId, isActive, sortOrder])
+}
+
+model MenuCardSchedule {
+  id         String   @id @default(cuid())
+  tenantId   String
+  menuCardId String
+  enabled    Boolean  @default(true)
+  dayOfWeek  Int
+  startTime  String
+  endTime    String
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  menuCard MenuCard @relation(fields: [menuCardId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, menuCardId, enabled, dayOfWeek])
+}
+
+model MenuCardItem {
+  id         String @id @default(cuid())
+  tenantId   String
+  menuCardId String
+  productId  String?
+  variantId  String?
+  sortOrder  Int    @default(0)
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  menuCard MenuCard @relation(fields: [menuCardId], references: [id], onDelete: Cascade)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant  ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, menuCardId, sortOrder])
 }
 
 model Order {
