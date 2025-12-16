@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useOrders } from "./stores/ordersStore";
+import { useOrders, type OrderLine, type PosMenuItemDTO } from "./stores/ordersStore";
+import LastReceiptTrigger from "./components/LastReceiptTrigger";
 import { fetchActivePosMenu } from "./api/pos";
 import type { PosMenuDTO } from "./types/pos";
 
@@ -166,8 +167,10 @@ export function App() {
             <div className="bon-header">
               <div className="bon-header-top">
                 <div className="bon-title">Bon</div>
-                <div className="bon-actions">
+                <div className="bon-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span className={`status-chip ${statusClass}`}>{statusLabel}</span>
+                  {/** Last receipt trigger in header */}
+                  <LastReceiptTrigger variant="header" />
                 </div>
               </div>
 
