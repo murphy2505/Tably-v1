@@ -5,9 +5,44 @@ function tenantHeaders() {
   return { headers: { "x-tenant-id": tenantId } };
 }
 
-type OrderStatus = "OPEN" | "SENT" | "IN_PREP" | "READY" | "COMPLETED" | "CANCELLED";
+export type OrderStatus = "OPEN" | "SENT" | "IN_PREP" | "READY" | "COMPLETED" | "CANCELLED";
 
-export async function apiTransitionOrder(orderId: string, to: OrderStatus) {
-  const res = await http.post<{ order: any }>(`/core/orders/${orderId}/transition`, { to }, tenantHeaders());
+export type OrderLineDTO = {
+  id: string;
+  title: string;
+  qty: number;
+  priceCents: number;
+};
+
+export type OrderDTO = {
+  id: string;
+  status: OrderStatus;
+  createdAt: string;
+  sentAt?: string | null;
+  inPrepAt?: string | null;
+  readyAt?: string | null;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
+  lines: OrderLineDTO[];
+};
+
+export async function apiTransitionOrder(orderId: string, to: OrderStatus): Promise<OrderDTO> {
+  const res = await http.post<{ order: OrderDTO }>(`/core/orders/${orderId}/transition`, { to }, tenantHeaders());
+  return res.data.order;
+}
+
+export async function apiListOrders(params?: { status?: OrderStatus }): Promise<{ orders: OrderDTO[] }> {
+  const qs = params?.status ? `?status=${encodeURIComponent(params.status)}` : "";
+  const res = await http.get<{ orders: OrderDTO[] }>(`/core/orders${qs}`, tenantHeaders());
+  return res.data;
+}
+
+export async function apiGetOrder(orderId: string): Promise<OrderDTO> {
+  const res = await http.get<{ order: OrderDTO }>(`/core/orders/${orderId}`, tenantHeaders());
+  return res.data.order;
+}
+
+export async function apiGetLastCompletedOrder(): Promise<OrderDTO> {
+  const res = await http.get<{ order: OrderDTO }>(`/core/orders/last-completed`, tenantHeaders());
   return res.data.order;
 }
