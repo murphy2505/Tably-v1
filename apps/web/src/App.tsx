@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useOrders, type OrderLine } from "./stores/ordersStore";
 import { apiCreateOrder, apiAddOrderLine, apiGetOrder, apiTransitionOrder, type OrderDTO } from "./api/pos/orders";
@@ -6,6 +6,7 @@ import { usePosSession } from "./stores/posSessionStore";
 import LastReceiptTrigger from "./components/LastReceiptTrigger";
 import { fetchActivePosMenu } from "./api/pos";
 import type { PosMenuDTO } from "./types/pos";
+import http from "./services/http";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -13,6 +14,10 @@ function formatEuro(cents: number): string {
 
 function categoryLabelFromItem(item: PosMenuDTO["items"][number]): string {
   return item.course?.shortLabel ?? item.course?.name ?? "Overig";
+}
+
+function tenantId() {
+  return (import.meta as any).env.VITE_DEFAULT_TENANT_ID || "cafetaria-centrum";
 }
 
 export function App() {
@@ -85,6 +90,9 @@ export function App() {
   const [activeOrder, setActiveOrder] = useState<OrderDTO | null>(null);
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [sentCount, setSentCount] = useState<number | null>(null);
+  const lastFetchRef = useRef(0);
+  const backoffRef = useRef(1000);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3000);
@@ -94,6 +102,44 @@ export function App() {
   const itemsCount = activeOrder ? activeOrder.lines.reduce((s, l) => s + l.qty, 0) : 0;
 
   // last receipt is handled via LastReceiptTrigger component
+  // KDS SENT badge count: fetch + SSE update (throttled)
+  async function fetchSentCount(force = false) {
+    const now = Date.now();
+    if (!force && now - lastFetchRef.current < 1000) return;
+    lastFetchRef.current = now;
+    try {
+      const res = await http.get<{ orders: OrderDTO[] }>("/core/kds/tickets?status=SENT", { headers: { "x-tenant-id": tenantId() } });
+      setSentCount(res.data.orders.length);
+    } catch {
+      setSentCount(null);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    let es: EventSource | null = null;
+    fetchSentCount(true);
+    function connect() {
+      if (cancelled) return;
+      es = new EventSource(`/pos-api/core/kds/stream?tenantId=${encodeURIComponent(tenantId())}`);
+      es.addEventListener("order", () => fetchSentCount(false));
+      es.onerror = () => {
+        try {
+          es && es.close();
+        } catch {}
+        const wait = backoffRef.current;
+        backoffRef.current = Math.min(wait * 2, 5000);
+        setTimeout(() => {
+          if (!cancelled) connect();
+        }, wait);
+      };
+    }
+    connect();
+    return () => {
+      cancelled = true;
+      try { es && es.close(); } catch {}
+    };
+  }, []);
 
   function syncLocalStoreFromOrder(ord: OrderDTO) {
     try {
@@ -275,6 +321,8 @@ export function App() {
                         await apiTransitionOrder(activeOrderId, "SENT");
                         clearActiveOrder();
                         setActiveOrder(null);
+                        // refresh KDS badge count optimistically
+                        fetchSentCount(true);
                       } catch (e) {
                         console.warn("send to kitchen failed", e);
                         setToast("Verzenden naar keuken mislukt");
@@ -342,7 +390,12 @@ export function App() {
         <LastReceiptTrigger variant="bottombar" />
 
         <button className="bar-btn" onClick={() => navigate("/kds")}>
-          KDS
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            KDS
+            {sentCount != null && sentCount > 0 && (
+              <span style={{ fontSize: 12, lineHeight: 1, padding: "2px 6px", borderRadius: 999, background: "#111827", color: "#fff" }}>{sentCount}</span>
+            )}
+          </span>
         </button>
       </div>
 
