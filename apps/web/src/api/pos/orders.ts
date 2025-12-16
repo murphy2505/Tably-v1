@@ -46,3 +46,13 @@ export async function apiGetLastCompletedOrder(): Promise<OrderDTO> {
   const res = await http.get<{ order: OrderDTO }>(`/core/orders/last-completed`, tenantHeaders());
   return res.data.order;
 }
+
+export async function apiCreateOrder(payload?: { tableId?: string | null }): Promise<OrderDTO> {
+  const res = await http.post<{ order: OrderDTO }>(`/core/orders`, payload ?? {}, tenantHeaders());
+  return res.data.order;
+}
+
+export async function apiAddOrderLine(orderId: string, productId: string, qty: number = 1): Promise<OrderDTO> {
+  const res = await http.post<{ order: OrderDTO }>(`/core/orders/${orderId}/lines`, { productId, qty }, tenantHeaders());
+  return res.data.order;
+}

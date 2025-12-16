@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useOrders, type OrderLine, type PosMenuItemDTO } from "./stores/ordersStore";
+import { useOrders, type OrderLine } from "./stores/ordersStore";
+import { apiCreateOrder, apiAddOrderLine, apiGetOrder, apiTransitionOrder, type OrderDTO } from "./api/pos/orders";
+import { usePosSession } from "./stores/posSessionStore";
 import LastReceiptTrigger from "./components/LastReceiptTrigger";
 import { fetchActivePosMenu } from "./api/pos";
 import type { PosMenuDTO } from "./types/pos";
@@ -33,7 +35,7 @@ export function App() {
     clearCurrentOrder,
     getItemsCount,
     getTotalCents,
-    getLastPaidOrder,
+    setCurrentOrder,
   } = useOrders();
 
   useEffect(() => {
@@ -79,18 +81,77 @@ export function App() {
     return items;
   }, [menu, activeCategory, search]);
 
-  const currentOrder = getCurrentOrder();
-  const totalCents = getTotalCents(currentOrderId);
-  const itemsCount = getItemsCount(currentOrderId);
+  const { activeOrderId, setActiveOrderId, clearActiveOrder } = usePosSession();
+  const [activeOrder, setActiveOrder] = useState<OrderDTO | null>(null);
+  const [sending, setSending] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+  const totalCents = activeOrder ? activeOrder.lines.reduce((s, l) => s + l.qty * l.priceCents, 0) : 0;
+  const itemsCount = activeOrder ? activeOrder.lines.reduce((s, l) => s + l.qty, 0) : 0;
 
-  const lastPaid = getLastPaidOrder();
+  // last receipt is handled via LastReceiptTrigger component
 
-  function addItemToOrder(item: PosMenuDTO["items"][number]) {
-    const id = item.id;
-    const title = item.variant ? item.variant.name : item.product.name;
-    const priceCents = item.priceCents;
-    addLine(id, title, priceCents, 1);
+  function syncLocalStoreFromOrder(ord: OrderDTO) {
+    try {
+      setCurrentOrder(ord.id);
+      clearCurrentOrder();
+      for (const line of ord.lines) {
+        addLine(line.id, line.title, line.priceCents, line.qty);
+      }
+    } catch (e) {
+      console.warn("syncLocalStoreFromOrder failed", e);
+    }
   }
+
+  async function addItemToOrder(item: PosMenuDTO["items"][number]) {
+    try {
+      let targetOrderId = activeOrderId;
+      if (!targetOrderId) {
+        const created = await apiCreateOrder();
+        targetOrderId = created.id;
+        setActiveOrderId(created.id);
+        setActiveOrder(created);
+        syncLocalStoreFromOrder(created);
+      }
+      const pid = item.product.id; // product id
+      const updated = await apiAddOrderLine(targetOrderId!, pid, 1);
+      setActiveOrder(updated);
+      syncLocalStoreFromOrder(updated);
+    } catch (e) {
+      console.warn("addItemToOrder failed", e);
+    }
+  }
+
+  // Hydrate active order when switching via recall
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrate() {
+      if (!activeOrderId) {
+        setActiveOrder(null);
+        return;
+      }
+      try {
+        const ord = await apiGetOrder(activeOrderId);
+        if (!cancelled) {
+          setActiveOrder(ord);
+          syncLocalStoreFromOrder(ord);
+        }
+      } catch (e) {
+        console.warn("hydrate active order failed", e);
+        if (!cancelled) {
+          // Clear invalid/404 order ids to keep POS usable
+          clearActiveOrder();
+          setActiveOrder(null);
+        }
+      }
+    }
+    hydrate();
+    return () => { cancelled = true; };
+  }, [activeOrderId]);
 
   const statusClass = loading ? "loading" : error ? "error" : "ready";
   const statusLabel = loading ? "Loading" : error ? "Error" : "Ready";
@@ -110,6 +171,11 @@ export function App() {
       </header>
 
       <div className="container pos-with-bottombar">
+        {toast && (
+          <div style={{ position: "fixed", right: 16, bottom: 72, background: "#111827", color: "white", padding: "10px 14px", borderRadius: 8, boxShadow: "0 6px 16px rgba(0,0,0,0.25)", zIndex: 1001 }}>
+            {toast}
+          </div>
+        )}
         <div className="mobile-tabs">
           <button className={`tab ${mobileTab === "producten" ? "active" : ""}`} onClick={() => setMobileTab("producten")}>
             Producten
@@ -181,20 +247,17 @@ export function App() {
               </div>
             </div>
 
-            <div className={`order-list ${currentOrder.lines.length === 0 ? "empty" : ""}`}>
-              {currentOrder.lines.length === 0 ? (
+            <div className={`order-list ${!activeOrder || activeOrder.lines.length === 0 ? "empty" : ""}`}>
+              {!activeOrder || activeOrder.lines.length === 0 ? (
                 <div>Nog geen items</div>
               ) : (
-                currentOrder.lines.map((l) => (
+                activeOrder.lines.map((l) => (
                   <div key={l.id} className="order-line">
                     <div className="order-line-title">{l.title}</div>
                     <div className="order-line-meta">
                       <span className="qty">{l.qty}×</span>
                       <span className="line-total">{formatEuro(l.qty * l.priceCents)}</span>
                     </div>
-                    <button className="order-line-remove" onClick={() => removeLine(l.id)}>
-                      ×
-                    </button>
                   </div>
                 ))
               )}
@@ -202,13 +265,58 @@ export function App() {
 
             <div className="actions">
               <div className="action-buttons">
-                <button className="btn danger" onClick={clearCurrentOrder}>
+                {activeOrder && activeOrder.status === "OPEN" && (
+                  <button
+                    className="btn primary"
+                    onClick={async () => {
+                      if (!activeOrderId) return;
+                      try {
+                        setSending(true);
+                        await apiTransitionOrder(activeOrderId, "SENT");
+                        clearActiveOrder();
+                        setActiveOrder(null);
+                      } catch (e) {
+                        console.warn("send to kitchen failed", e);
+                        setToast("Verzenden naar keuken mislukt");
+                      } finally {
+                        setSending(false);
+                      }
+                    }}
+                    disabled={sending}
+                  >
+                    Naar keuken
+                  </button>
+                )}
+                <button
+                  className="btn"
+                  onClick={async () => {
+                    try {
+                      const created = await apiCreateOrder();
+                      setActiveOrderId(created.id);
+                      setActiveOrder(created);
+                      // mirror to local store for checkout compatibility
+                      setCurrentOrder(created.id);
+                      clearCurrentOrder();
+                      for (const line of created.lines) {
+                        addLine(line.id, line.title, line.priceCents, line.qty);
+                      }
+                    } catch (e) {
+                      console.warn("new order create failed", e);
+                    }
+                  }}
+                >
+                  Nieuwe bon
+                </button>
+                <button className="btn" onClick={() => { clearActiveOrder(); setActiveOrder(null); }}>
+                  Hold
+                </button>
+                <button className="btn danger" onClick={() => { clearActiveOrder(); setActiveOrder(null); }}>
                   Breek af
                 </button>
                 <button
                   className="btn success"
-                  onClick={() => navigate("/checkout", { state: { orderId: currentOrderId } })}
-                  disabled={currentOrder.lines.length === 0}
+                  onClick={() => activeOrderId && navigate("/checkout", { state: { orderId: activeOrderId } })}
+                  disabled={!activeOrder || activeOrder.lines.length === 0}
                 >
                   Betaal
                 </button>
@@ -220,25 +328,18 @@ export function App() {
 
       {/* POS Bottom Bar */}
       <div className="pos-bottombar">
+        <button
+          className="bar-btn"
+          onClick={() => { clearActiveOrder(); setActiveOrder(null); }}
+          disabled={!activeOrderId}
+        >
+          Hold
+        </button>
         <button className="bar-btn" onClick={() => navigate("/orders")}>
           Bestellingen
         </button>
 
         <LastReceiptTrigger variant="bottombar" />
-
-        <button
-          className="bar-btn"
-          onClick={() => {
-            if (!lastPaid) {
-              console.log("no-last-paid");
-              setLastReceiptOpen(true);
-              return;
-            }
-            console.log("print-last", lastPaid.id);
-          }}
-        >
-          Print laatste bon
-        </button>
 
         <button className="bar-btn ghost" disabled title="Volgende fase">
           KDS

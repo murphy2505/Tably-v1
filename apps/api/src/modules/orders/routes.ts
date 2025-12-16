@@ -55,6 +55,54 @@ ordersRouter.post("/core/orders/:id/transition", asyncHandler(async (req, res) =
   return res.json({ order: updated });
 }));
 
+// Create new OPEN order
+ordersRouter.post("/core/orders", asyncHandler(async (req, res) => {
+  const tenantId = req.header("x-tenant-id");
+  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+
+  const Body = z.object({ tableId: z.string().nullable().optional() }).optional();
+  const parsed = Body.safeParse(req.body);
+  if (!parsed.success) return validationError(res, parsed.error.issues);
+
+  const order = await prisma.order.create({
+    data: { tenantId, status: "OPEN" as any },
+    include: { lines: true },
+  });
+  return res.status(201).json({ order });
+}));
+
+// Add or update line in order
+ordersRouter.post("/core/orders/:id/lines", asyncHandler(async (req, res) => {
+  const tenantId = req.header("x-tenant-id");
+  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+
+  const id = String(req.params.id);
+  const existing = await prisma.order.findFirst({ where: { id, tenantId } });
+  if (!existing) return notFound(res);
+
+  const Body = z.object({ productId: z.string(), qty: z.number().int().positive().optional() });
+  const parsed = Body.safeParse(req.body);
+  if (!parsed.success) return validationError(res, parsed.error.issues);
+  const { productId, qty = 1 } = parsed.data;
+
+  // fetch product price
+  const product = await prisma.product.findFirst({ where: { id: productId, tenantId } });
+  if (!product) return notFound(res);
+  const priceCents = product.basePriceCents;
+
+  // check if a line for product exists (by title or productId—schema lacks productId on OrderLine)
+  // We'll match on title (product name); if exists, update qty; else create
+  const title = product.name;
+  const line = await prisma.orderLine.findFirst({ where: { orderId: id, tenantId, title } });
+  if (line) {
+    await prisma.orderLine.update({ where: { id: line.id }, data: { qty: line.qty + qty } });
+  } else {
+    await prisma.orderLine.create({ data: { tenantId, orderId: id, title, qty, priceCents } });
+  }
+
+  const order = await prisma.order.findFirst({ where: { id, tenantId }, include: { lines: true } });
+  return res.json({ order });
+}));
 // List orders (tenant-scoped)
 ordersRouter.get("/core/orders", asyncHandler(async (req, res) => {
   const tenantId = req.header("x-tenant-id");

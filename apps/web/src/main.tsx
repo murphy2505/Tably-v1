@@ -1,10 +1,11 @@
-import React from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import AppShell from "./app/AppShell";
 import { App as PosView } from "./App";
 import { OrdersProvider } from "./stores/ordersStore";
+import { PosSessionProvider } from "./stores/posSessionStore";
 
 /* Assortiment */
 import ProductsPage from "./pages/ProductsPage";
@@ -25,10 +26,11 @@ import Settings from "./pages/Settings";
 const root = createRoot(document.getElementById("root")!);
 
 root.render(
-  <React.StrictMode>
+  <StrictMode>
     <BrowserRouter>
-      <OrdersProvider>
-        <Routes>
+      <PosSessionProvider>
+        <OrdersProvider>
+          <Routes>
           <Route path="/" element={<AppShell />}>
             <Route index element={<Navigate to="/pos" replace />} />
 
@@ -56,8 +58,9 @@ root.render(
 
             <Route path="*" element={<Navigate to="/pos" replace />} />
           </Route>
-        </Routes>
-      </OrdersProvider>
+          </Routes>
+        </OrdersProvider>
+      </PosSessionProvider>
     </BrowserRouter>
-  </React.StrictMode>
+  </StrictMode>
 );

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { usePosSession } from "../../stores/posSessionStore";
 import { apiListOrders, type OrderDTO, type OrderStatus } from "../../api/pos/orders";
 import OrderDetailPanel from "../../components/orders/OrderDetailPanel";
 
@@ -23,6 +24,7 @@ const STATUSES: OrderStatus[] = ["OPEN", "SENT", "IN_PREP", "READY", "COMPLETED"
 
 export default function OrdersScreen() {
   const navigate = useNavigate();
+  const { setActiveOrderId } = usePosSession();
   const [status, setStatus] = useState<OrderStatus>("OPEN");
   const [orders, setOrders] = useState<OrderDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -82,7 +84,8 @@ export default function OrdersScreen() {
           orders.map((o) => {
             const total = totalCentsOf(o);
             const items = itemsCountOf(o);
-            const time = o.completedAt || o.cancelledAt ? formatTime(o.completedAt || o.cancelledAt) : formatTime(o.createdAt);
+            const timeIso = o.completedAt || o.cancelledAt || o.createdAt;
+            const time = new Date(timeIso).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
 
             return (
               <div className="order-card" key={o.id} onClick={() => setSelectedOrderId(o.id)} style={{ cursor: "pointer" }}>
@@ -101,6 +104,18 @@ export default function OrdersScreen() {
                       <div className="order-card-total">{formatEuro(total)}</div>
                       <span className={`order-pill ${o.status.toLowerCase()}`}>{statusLabel(o.status)}</span>
                     </div>
+                  </div>
+                  <div className="order-actions">
+                    <button
+                      className="btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveOrderId(o.id);
+                        navigate("/pos");
+                      }}
+                    >
+                      Zet op kassa
+                    </button>
                   </div>
 
                   {o.lines.length > 0 && (

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiGetOrder, apiTransitionOrder, type OrderDTO, type OrderStatus } from "../../api/pos/orders";
+import { usePosSession } from "../../stores/posSessionStore";
 
 type Props = {
   orderId: string | null;
@@ -21,6 +22,7 @@ export default function OrderDetailPanel({ orderId, onClose, onChanged }: Props)
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderDTO | null>(null);
   const [acting, setActing] = useState<OrderStatus | null>(null);
+  const { activeOrderId, clearActiveOrder } = usePosSession();
 
   useEffect(() => {
     let active = true;
@@ -57,6 +59,9 @@ export default function OrderDetailPanel({ orderId, onClose, onChanged }: Props)
       const fresh = await apiGetOrder(order.id);
       setOrder(fresh);
       onChanged?.();
+      if (next === "SENT" && activeOrderId === order.id) {
+        clearActiveOrder();
+      }
     } catch (e: any) {
       const msg = e?.response?.data?.error?.message === "INVALID_TRANSITION" ? "Ongeldige overgang" : "Actie mislukt";
       setError(msg);

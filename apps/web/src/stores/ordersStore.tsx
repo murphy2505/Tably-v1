@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 export type OrderStatus = "OPEN" | "PAID" | "VOID";
 export type OrderLine = { id: string; title: string; priceCents: number; qty: number };
@@ -21,7 +21,6 @@ type OrdersContextValue = {
   removeLine: (menuItemId: string) => void;
   clearCurrentOrder: () => void;
 
-  markPaid: (orderId: string) => void;
   voidOrder: (orderId: string) => void;
 
   getCurrentOrder: () => Order;
@@ -29,7 +28,6 @@ type OrdersContextValue = {
   getItemsCount: (orderId?: string) => number;
 
   duplicateToNewOpen: (orderId: string) => string;
-  getLastPaidOrder: () => Order | null;
 };
 
 const OrdersContext = createContext<OrdersContextValue | null>(null);
@@ -38,7 +36,7 @@ function uid(prefix = "ord"): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function OrdersProvider({ children }: { children: React.ReactNode }) {
+export function OrdersProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string>("");
   const didInit = useRef(false);
@@ -64,6 +62,12 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 
   const setCurrentOrder = useCallback((id: string) => {
     setCurrentOrderId(id);
+    setOrders((prev) => {
+      const exists = prev.some((o) => o.id === id);
+      if (exists) return prev;
+      const next: Order = { id, status: "OPEN", lines: [], createdAt: Date.now() };
+      return [next, ...prev];
+    });
   }, []);
 
   const getCurrentOrder = useCallback((): Order => {
@@ -122,22 +126,7 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
     );
   }, [currentOrderId]);
 
-  const markPaid = useCallback(
-    (orderId: string) => {
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: "PAID", paidAt: Date.now() } : o))
-      );
-
-      // if you paid current order -> auto new OPEN order
-      if (orderId === currentOrderId) {
-        const newId = uid();
-        const next: Order = { id: newId, status: "OPEN", lines: [], createdAt: Date.now() };
-        setOrders((prev) => [next, ...prev]);
-        setCurrentOrderId(newId);
-      }
-    },
-    [currentOrderId]
-  );
+  // removed local markPaid; rely on backend statuses
 
   const voidOrder = useCallback(
     (orderId: string) => {
@@ -186,12 +175,6 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
     [orders]
   );
 
-  const getLastPaidOrder = useCallback((): Order | null => {
-    const paid = orders.filter((o) => o.status === "PAID");
-    if (paid.length === 0) return null;
-    return paid.sort((a, b) => (b.paidAt ?? 0) - (a.paidAt ?? 0))[0] ?? null;
-  }, [orders]);
-
   const value: OrdersContextValue = useMemo(
     () => ({
       orders,
@@ -201,13 +184,11 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
       addLine,
       removeLine,
       clearCurrentOrder,
-      markPaid,
       voidOrder,
       getCurrentOrder,
       getTotalCents,
       getItemsCount,
       duplicateToNewOpen,
-      getLastPaidOrder,
     }),
     [
       orders,
@@ -217,13 +198,11 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
       addLine,
       removeLine,
       clearCurrentOrder,
-      markPaid,
       voidOrder,
       getCurrentOrder,
       getTotalCents,
       getItemsCount,
       duplicateToNewOpen,
-      getLastPaidOrder,
     ]
   );
 

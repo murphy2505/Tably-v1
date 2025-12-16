@@ -1,6 +1,8 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOrders } from "../stores/ordersStore";
+import { usePosSession } from "../stores/posSessionStore";
+import { apiTransitionOrder } from "../api/pos/orders";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -16,7 +18,8 @@ export default function CheckoutScreen() {
   const navigate = useNavigate();
   const { state } = useLocation();
   const nav = (state || {}) as Partial<CheckoutState>;
-  const { orders, getTotalCents, getItemsCount, duplicateToNewOpen, markPaid } = useOrders();
+  const { orders, getTotalCents, getItemsCount } = useOrders();
+  const { clearActiveOrder } = usePosSession();
 
   let orderId: string | undefined = undefined;
   if (nav && (nav as any).orderId) orderId = (nav as any).orderId as string;
@@ -27,10 +30,14 @@ export default function CheckoutScreen() {
 
   const [view, setView] = useState<CheckoutView>("CHECKOUT_IDLE");
   const [method, setMethod] = useState<PayMethod | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  // CASH: store string digits, treat as euros
+  // CASH: store string digits representing cents (implicit two decimals)
   const [receivedStr, setReceivedStr] = useState<string>("");
-  const receivedCents = useMemo(() => (parseInt(receivedStr || "0", 10) * 100) | 0, [receivedStr]);
+  const receivedCents = useMemo(() => {
+    const v = parseInt(receivedStr || "0", 10);
+    return Number.isFinite(v) ? v : 0;
+  }, [receivedStr]);
   const changeCents = Math.max(0, receivedCents - totalCents);
 
   // GIFTCARD placeholders
@@ -42,23 +49,53 @@ export default function CheckoutScreen() {
 
   function selectMethod(next: PayMethod) {
     setMethod(next);
-    if (next === "CASH") setView("CASH_HELP");
-    else if (next === "PIN") setView("CHECKOUT_IDLE");
+    if (next === "CASH") {
+      // Always show helper, prefilled to total for quick confirm
+      setReceivedStr(String(totalCents));
+      setView("CASH_HELP");
+    } else if (next === "PIN") setView("CHECKOUT_IDLE");
     else setView("GIFT_FLOW");
   }
 
-  function onConfirm() {
-    if (method === "PIN") {
-      setView("CHECKOUT_COMPLETE");
-      return;
+  // Keep cash helper prefill sane if total changes
+  // When in CASH_HELP and received is empty or smaller than total, prefill to total
+  // Avoid flicker by only adjusting in helper view
+  useEffect(() => {
+    if (method === "CASH" && view === "CASH_HELP") {
+      const current = parseInt(receivedStr || "0", 10) || 0;
+      if (current === 0 || current < totalCents) {
+        setReceivedStr(String(totalCents));
+      }
     }
-    if (method === "CASH") {
-      if (receivedCents >= totalCents) setView("CHECKOUT_COMPLETE");
-      return;
-    }
-    if (method === "GIFTCARD") {
+  }, [method, view, totalCents]);
+
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  async function onConfirm() {
+    if (!orderId || submitting) return;
+    // Determine if payment is satisfied
+    const ok =
+      method === "PIN" ||
+      (method === "CASH" && receivedCents >= totalCents) ||
+      method === "GIFTCARD";
+    if (!ok) return;
+
+    try {
+      setSubmitting(true);
+      await apiTransitionOrder(orderId, "COMPLETED");
+    } catch (e) {
+      // Safety: still allow completion UI, do not brick app
+      console.warn("transition to COMPLETED failed", e);
+      setToast("Bon afronden mislukt — offline verdergegaan");
+    } finally {
+      setSubmitting(false);
       setView("CHECKOUT_COMPLETE");
-      return;
     }
   }
 
@@ -66,9 +103,7 @@ export default function CheckoutScreen() {
     navigate("/pos");
   }
   function onDone() {
-    if (orderId) {
-      markPaid(orderId);
-    }
+    clearActiveOrder();
     navigate("/pos");
   }
 
@@ -87,6 +122,11 @@ export default function CheckoutScreen() {
 
   return (
     <div className="checkout-screen light">
+      {toast && (
+        <div style={{ position: "fixed", right: 16, bottom: 16, background: "#111827", color: "white", padding: "10px 14px", borderRadius: 8, boxShadow: "0 6px 16px rgba(0,0,0,0.25)", zIndex: 1001 }}>
+          {toast}
+        </div>
+      )}
       {/* No floating trigger; placed in bottom bar */}
 
       <div className="checkout-grid">
@@ -128,10 +168,10 @@ export default function CheckoutScreen() {
 
         {/* RIGHT column */}
         <section className="checkout-right">
-          <div className="pay-tiles">
-            <button className={`pay-tile ${method === "CASH" ? "active" : ""}`} onClick={() => selectMethod("CASH")}>Contant</button>
-            <button className={`pay-tile ${method === "PIN" ? "active" : ""}`} onClick={() => selectMethod("PIN")}>Pin</button>
-            <button className={`pay-tile ${method === "GIFTCARD" ? "active" : ""}`} onClick={() => selectMethod("GIFTCARD")}>Kadobon</button>
+          <div className="pay-tiles stacked">
+            <button className={`pay-tile large soft-green ${method === "CASH" ? "active" : ""}`} onClick={() => selectMethod("CASH")}>Contant</button>
+            <button className={`pay-tile large soft-blue ${method === "PIN" ? "active" : ""}`} onClick={() => selectMethod("PIN")}>Pin</button>
+            <button className={`pay-tile large soft-purple ${method === "GIFTCARD" ? "active" : ""}`} onClick={() => selectMethod("GIFTCARD")}>Kadobon</button>
           </div>
 
           <div className="pay-context">
@@ -187,7 +227,8 @@ export default function CheckoutScreen() {
               onClick={view === "CHECKOUT_COMPLETE" ? onDone : onConfirm}
               disabled={
                 (view === "CASH_HELP" && receivedCents < totalCents) ||
-                (view === "CHECKOUT_IDLE" && method == null)
+                (view === "CHECKOUT_IDLE" && method == null) ||
+                submitting
               }
             >
               {view === "CHECKOUT_COMPLETE" ? "Gereed (volgende klant)" : "Bevestig"}
@@ -212,6 +253,10 @@ const numpadKeys = ["1","2","3","4","5","6","7","8","9","0","C","←"] as const;
 function updateDigits(current: string, key: string): string {
   if (key === "C") return "";
   if (key === "←") return current.slice(0, -1);
-  if (/^\d$/.test(key)) return current + key;
+  if (/^\d$/.test(key)) {
+    // Append digit; cap length to avoid overflow (max 9 digits ≈ €9,999,999.99)
+    const next = current + key;
+    return next.slice(0, 9);
+  }
   return current;
 }
