@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useOrders, type Order } from "../../stores/ordersStore";
-import { apiTransitionOrder } from "../../api/pos/orders";
+import { apiListOrders, type OrderDTO, type OrderStatus } from "../../api/pos/orders";
+import OrderDetailPanel from "../../components/orders/OrderDetailPanel";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -12,28 +12,44 @@ function formatTime(ts: number): string {
   return d.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
 }
 
-function totalCentsOf(o: Order): number {
+function totalCentsOf(o: OrderDTO): number {
   return o.lines.reduce((s, l) => s + l.qty * l.priceCents, 0);
 }
-function itemsCountOf(o: Order): number {
+function itemsCountOf(o: OrderDTO): number {
   return o.lines.reduce((s, l) => s + l.qty, 0);
 }
 
-type Tab = "OPEN" | "PAID";
+const STATUSES: OrderStatus[] = ["OPEN", "SENT", "IN_PREP", "READY", "COMPLETED", "CANCELLED"];
 
 export default function OrdersScreen() {
   const navigate = useNavigate();
-  const { orders, setCurrentOrder, voidOrder, duplicateToNewOpen } = useOrders();
-  const [tab, setTab] = useState<Tab>("OPEN");
+  const [status, setStatus] = useState<OrderStatus>("OPEN");
+  const [orders, setOrders] = useState<OrderDTO[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  const list = useMemo(() => {
-    const filtered = orders.filter((o) => (tab === "OPEN" ? o.status === "OPEN" : o.status === "PAID"));
-    return filtered.sort((a, b) => {
-      const ta = tab === "OPEN" ? a.createdAt : (a.paidAt ?? a.createdAt);
-      const tb = tab === "OPEN" ? b.createdAt : (b.paidAt ?? b.createdAt);
-      return tb - ta;
-    });
-  }, [orders, tab]);
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiListOrders({ status });
+      setOrders(res.orders);
+      // keep selection if still visible
+      if (selectedOrderId && !res.orders.some((o) => o.id === selectedOrderId)) {
+        setSelectedOrderId(null);
+      }
+    } catch (e: any) {
+      setError(typeof e?.message === "string" ? e.message : "Kon bonnen niet laden");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   return (
     <div className="orders-screen">
@@ -48,26 +64,28 @@ export default function OrdersScreen() {
         </div>
       </div>
 
-      <div className="orders-tabs">
-        <button className={`orders-tab ${tab === "OPEN" ? "active" : ""}`} onClick={() => setTab("OPEN")}>
-          Open
-        </button>
-        <button className={`orders-tab ${tab === "PAID" ? "active" : ""}`} onClick={() => setTab("PAID")}>
-          Afgehandeld
-        </button>
+      <div className="orders-tabs" style={{ flexWrap: "wrap" }}>
+        {STATUSES.map((s) => (
+          <button key={s} className={`orders-tab ${status === s ? "active" : ""}`} onClick={() => setStatus(s)}>
+            {statusLabel(s)}
+          </button>
+        ))}
       </div>
 
-      <div className="orders-list">
-        {list.length === 0 ? (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr minmax(320px, 480px)", gap: 12, alignItems: "start", padding: 12 }}>
+        <div className="orders-list">
+          {loading && <div>Bezig met laden…</div>}
+          {error && <div className="orders-empty" style={{ color: "#991b1b" }}>{error}</div>}
+          {!loading && !error && orders.length === 0 ? (
           <div className="orders-empty">Geen bonnen in deze lijst.</div>
-        ) : (
-          list.map((o) => {
+          ) : (
+          orders.map((o) => {
             const total = totalCentsOf(o);
             const items = itemsCountOf(o);
-            const time = tab === "OPEN" ? formatTime(o.createdAt) : formatTime(o.paidAt ?? o.createdAt);
+            const time = o.completedAt || o.cancelledAt ? formatTime(o.completedAt || o.cancelledAt) : formatTime(o.createdAt);
 
             return (
-              <div className="order-card" key={o.id}>
+              <div className="order-card" key={o.id} onClick={() => setSelectedOrderId(o.id)} style={{ cursor: "pointer" }}>
                 <div className="order-card-main">
                   <div className="order-card-row">
                     <div className="order-card-left">
@@ -81,9 +99,7 @@ export default function OrdersScreen() {
 
                     <div className="order-card-right">
                       <div className="order-card-total">{formatEuro(total)}</div>
-                      <span className={`order-pill ${o.status.toLowerCase()}`}>
-                        {o.status === "PAID" ? "Afgehandeld" : o.status === "VOID" ? "Void" : "Open"}
-                      </span>
+                      <span className={`order-pill ${o.status.toLowerCase()}`}>{statusLabel(o.status)}</span>
                     </div>
                   </div>
 
@@ -99,59 +115,23 @@ export default function OrdersScreen() {
                     </div>
                   )}
                 </div>
-
-                <div className="order-card-actions">
-                  {/* Dev-only smoke test: transition OPEN -> SENT */}
-                  {o.status === "OPEN" && (
-                    <button
-                      className="btn"
-                      onClick={async () => {
-                        try {
-                          await apiTransitionOrder(o.id, "SENT");
-                        } catch (e) {
-                          console.warn("transition failed", e);
-                        }
-                      }}
-                    >
-                      Markeer als verzonden (dev)
-                    </button>
-                  )}
-                  {o.status === "OPEN" ? (
-                    <>
-                      <button
-                        className="btn primary"
-                        onClick={() => {
-                          setCurrentOrder(o.id);
-                          navigate("/pos");
-                        }}
-                      >
-                        Open
-                      </button>
-                      <button className="btn danger" onClick={() => voidOrder(o.id)}>Void</button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        className="btn primary"
-                        onClick={() => {
-                          const newId = duplicateToNewOpen(o.id);
-                          setCurrentOrder(newId);
-                          navigate("/pos");
-                        }}
-                      >
-                        Heropen
-                      </button>
-                      <button className="btn" onClick={() => console.log("details", o.id)}>
-                        Details
-                      </button>
-                    </>
-                  )}
-                </div>
               </div>
             );
           })
-        )}
+          )}
+        </div>
+        <OrderDetailPanel orderId={selectedOrderId} onChanged={load} />
       </div>
     </div>
   );
+}
+
+function statusLabel(s: OrderStatus) {
+  if (s === "OPEN") return "Open";
+  if (s === "SENT") return "Verzonden";
+  if (s === "IN_PREP") return "In bereiding";
+  if (s === "READY") return "Klaar";
+  if (s === "COMPLETED") return "Afgerond";
+  if (s === "CANCELLED") return "Geannuleerd";
+  return s;
 }
