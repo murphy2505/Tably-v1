@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { apiGetLastCompletedOrder, type OrderDTO } from "../api/pos/orders";
 
-type Props = { variant?: "floating" | "header" };
+type Props = { variant?: "header" | "bottombar" };
 
 export default function LastReceiptTrigger({ variant = "floating" }: Props) {
   const [open, setOpen] = useState(false);
@@ -24,7 +24,7 @@ export default function LastReceiptTrigger({ variant = "floating" }: Props) {
     }
   }
 
-  const triggerClass = variant === "floating" ? "floating-last-receipt" : "bon-link";
+  const triggerClass = variant === "header" ? "bon-link" : "btn";
   const triggerLabel = "Laatste bon";
 
   return (

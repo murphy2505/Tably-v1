@@ -88,8 +88,7 @@ export default function CheckoutScreen() {
 
   return (
     <div className="checkout-screen light">
-      {/* Floating last receipt trigger */}
-      <LastReceiptTrigger variant="floating" />
+      {/* No floating trigger; placed in bottom bar */}
 
       <div className="checkout-grid">
         {/* LEFT column */}
@@ -184,6 +183,7 @@ export default function CheckoutScreen() {
 
           <div className="pay-actions-sticky">
             <button className="btn danger" onClick={onAbort}>Breek af</button>
+            <LastReceiptTrigger variant="bottombar" />
             <button
               className="btn primary"
               onClick={view === "CHECKOUT_COMPLETE" ? onDone : onConfirm}
