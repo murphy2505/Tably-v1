@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import { getTenantIdFromRequest } from "./tenant";
 import { catalogRouter } from "./modules/catalog/routes";
+import { asyncHandler } from "./lib/http";
+import { listVatRates } from "./modules/catalog/controller";
 import { menuRouter } from "./modules/menu/routes";
 import { ordersRouter } from "./modules/orders/routes";
 import { errorMiddleware, serviceUnavailable } from "./lib/http";
@@ -66,6 +68,9 @@ export function createServer() {
 
   // Ensure tenant exists for subsequent routes (not applied to /health or /ready)
   app.use(ensureTenant);
+
+  // Alias for tax rates outside catalog namespace for POS/Web
+  app.get("/core/tax-rates", asyncHandler(listVatRates));
 
   app.use("/core/catalog", catalogRouter);
   app.use("/core/menu", menuRouter);

@@ -39,6 +39,8 @@ catalogRouter.delete("/revenue-groups/:id", asyncHandler(ctrl.deleteRevenueGroup
 // VAT RATES  ✅ (nieuw, schoon)
 // ===============================
 catalogRouter.get("/vat-rates", asyncHandler(ctrl.listVatRates));
+// Alias path for clients expecting tax-rates naming
+catalogRouter.get("/tax-rates", asyncHandler(ctrl.listVatRates));
 
 // ===============================
 // Product Groups

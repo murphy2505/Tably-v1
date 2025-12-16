@@ -416,6 +416,17 @@ export async function createProduct(req: Request, res: Response) {
     }
     if (details.length) return validationError(res, details);
 
+    // Determine default VAT rate (21%) when none provided
+    let vatRateId: string | null = req.body.vatRateId ?? null;
+    if (!vatRateId) {
+      const defaultVat = await prisma.vatRate.findFirst({ where: { tenantId, isActive: true, rate: 21 }, select: { id: true } });
+      vatRateId = defaultVat?.id ?? null;
+    } else {
+      // Validate provided vatRateId belongs to tenant
+      const vr = await prisma.vatRate.findFirst({ where: { id: vatRateId, tenantId }, select: { id: true } });
+      if (!vr) return validationError(res, [{ path: ["vatRateId"], message: "Onbekend BTW-tarief voor deze tenant" }]);
+    }
+
     const prod = await prisma.product.create({
       data: {
         tenantId,
@@ -424,7 +435,7 @@ export async function createProduct(req: Request, res: Response) {
         name: req.body.name,
         description: req.body.description ?? null,
         basePriceCents: req.body.basePriceCents,
-        vatRateId: req.body.vatRateId ?? null,
+        vatRateId,
         imageUrl: req.body.imageUrl ?? null,
         allergenTags: req.body.allergenTags ?? null,
         isActive: req.body.isActive ?? true,
@@ -451,6 +462,12 @@ export async function updateProduct(req: Request, res: Response) {
         where: { id: req.body.productGroupId, tenantId },
       });
       if (!pg) return notFound(res);
+    }
+
+    // Validate selected vatRate if provided
+    if (req.body.vatRateId) {
+      const vr = await prisma.vatRate.findFirst({ where: { id: req.body.vatRateId, tenantId }, select: { id: true } });
+      if (!vr) return validationError(res, [{ path: ["vatRateId"], message: "Onbekend BTW-tarief voor deze tenant" }]);
     }
 
     const prod = await prisma.product.update({
