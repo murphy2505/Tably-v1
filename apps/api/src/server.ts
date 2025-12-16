@@ -10,6 +10,22 @@ import { ensureTenant } from "./ensureTenant";
 
 export function createServer() {
   const app = express();
+  const port = Number(process.env.PORT || 4002);
+  const dbUrl = process.env.DATABASE_URL || "";
+
+  function maskDbUrl(url?: string) {
+    if (!url) return "";
+    try {
+      const u = new URL(url);
+      if (u.password) u.password = "***";
+      return u.toString();
+    } catch {
+      return url.replace(/:\/\/([^:]+):([^@]+)@/, "://$1:***@");
+    }
+  }
+
+  console.log(`[api] PORT=${port}`);
+  console.log(`[api] DATABASE_URL=${maskDbUrl(dbUrl)}`);
 
   const allowedOrigins = [
     "http://localhost:5173",
