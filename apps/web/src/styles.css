@@ -816,6 +816,7 @@ body {
   justify-content: center;
   padding: 16px;
   z-index: 1000;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
 }
 
 .checkout-modal {
@@ -825,6 +826,9 @@ body {
   border-radius: 8px;
   padding: 12px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  max-height: 86vh;
+  overflow: auto;
+  z-index: 1001;
 }
 
 @media (max-width: 1100px) {
