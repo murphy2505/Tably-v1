@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { useOrders } from "../stores/ordersStore";
 import { usePosSession } from "../stores/posSessionStore";
-import { apiTransitionOrder } from "../api/pos/orders";
+import { apiGetOrder, apiPayOrder } from "../api/pos/orders";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -18,15 +18,48 @@ export default function CheckoutScreen() {
   const navigate = useNavigate();
   const { state } = useLocation();
   const nav = (state || {}) as Partial<CheckoutState>;
-  const { orders, getTotalCents, getItemsCount } = useOrders();
+  const { orders, getTotalCents } = useOrders();
   const { clearActiveOrder } = usePosSession();
 
   let orderId: string | undefined = undefined;
   if (nav && (nav as any).orderId) orderId = (nav as any).orderId as string;
 
   const order = orders.find((o) => o.id === orderId);
-  const lines = order ? order.lines : [];
-  const totalCents = orderId ? getTotalCents(orderId) : 0;
+  const initialLines = order ? order.lines : [];
+  const fallbackTotal = orderId ? getTotalCents(orderId) : 0;
+
+  // Fetch the order fresh with backend totals
+  const [serverOrder, setServerOrder] = useState<null | {
+    id: string;
+    lines: { title: string; qty: number; priceCents: number }[];
+    subtotalExclVatCents: number;
+    totalInclVatCents: number;
+    vatBreakdown?: Record<string, { rateBps: number; grossCents: number; netCents: number; vatCents: number }>;
+  }>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!orderId) return;
+      try {
+        const o = await apiGetOrder(orderId);
+        if (!alive) return;
+        setServerOrder({
+          id: o.id,
+          lines: o.lines.map((l) => ({ title: l.title, qty: l.qty, priceCents: l.priceCents })),
+          subtotalExclVatCents: o.subtotalExclVatCents ?? 0,
+          totalInclVatCents: o.totalInclVatCents ?? 0,
+          vatBreakdown: o.vatBreakdown as any,
+        });
+      } catch (_e) {
+        // Keep fallback from local store
+      }
+    })();
+    return () => { alive = false; };
+  }, [orderId]);
+
+  const lines = serverOrder?.lines ?? initialLines;
+  const totalCents = serverOrder?.totalInclVatCents ?? fallbackTotal;
+  const subtotalCents = serverOrder?.subtotalExclVatCents ?? lines.reduce((s, l) => s + l.qty * l.priceCents, 0);
 
   const [view, setView] = useState<CheckoutView>("CHECKOUT_IDLE");
   const [method, setMethod] = useState<PayMethod | null>(null);
@@ -43,9 +76,10 @@ export default function CheckoutScreen() {
   // GIFTCARD placeholders
   const [giftCode, setGiftCode] = useState<string>("");
 
-  const subtotalCents = useMemo(() => lines.reduce((s, l) => s + l.qty * l.priceCents, 0), [lines]);
-  const vatLowCents = 0;
-  const vatHighCents = 0;
+  const vatLines = useMemo(() => {
+    const map = serverOrder?.vatBreakdown || {};
+    return Object.values(map).sort((a, b) => a.rateBps - b.rateBps);
+  }, [serverOrder]);
 
   function selectMethod(next: PayMethod) {
     setMethod(next);
@@ -88,7 +122,14 @@ export default function CheckoutScreen() {
 
     try {
       setSubmitting(true);
-      await apiTransitionOrder(orderId, "COMPLETED");
+      if (method === "PIN") {
+        await apiPayOrder(orderId, { method: "PIN", paymentRef: "PIN-STUB" });
+      } else if (method === "CASH") {
+        await apiPayOrder(orderId, { method: "CASH", cashReceivedCents: receivedCents });
+      } else {
+        // For gift flow demo, treat as cash-equivalent without amount
+        await apiPayOrder(orderId, { method: "PIN", paymentRef: "GIFT-STUB" });
+      }
     } catch (e) {
       // Safety: still allow completion UI, do not brick app
       console.warn("transition to COMPLETED failed", e);
@@ -158,9 +199,14 @@ export default function CheckoutScreen() {
             </div>
 
             <div className="receipt-footer-sticky">
-              <div className="sum-row"><span>Subtotaal</span><span>{formatEuro(subtotalCents)}</span></div>
-              <div className="sum-row"><span>BTW laag</span><span>{vatLowCents ? formatEuro(vatLowCents) : "—"}</span></div>
-              <div className="sum-row"><span>BTW hoog</span><span>{vatHighCents ? formatEuro(vatHighCents) : "—"}</span></div>
+              <div className="sum-row"><span>Subtotaal (excl. btw)</span><span>{formatEuro(subtotalCents)}</span></div>
+              {vatLines.length === 0 ? (
+                <div className="sum-row"><span>BTW</span><span>—</span></div>
+              ) : (
+                vatLines.map((v, i) => (
+                  <div key={i} className="sum-row"><span>BTW {(v.rateBps/100).toFixed(0)}%</span><span>{formatEuro(v.vatCents)}</span></div>
+                ))
+              )}
               <div className="sum-row sum-total"><span>Totaal</span><span>{formatEuro(totalCents)}</span></div>
             </div>
           </div>

@@ -392,9 +392,9 @@ export default function ProductsPage() {
               </label>
 
               <label style={labelRow}>
-                <span>BTW (override)</span>
+                <span>BTW-tarief</span>
                 <select value={formVatRateId} onChange={(e) => setFormVatRateId(e.target.value)}>
-                  <option value="">— erven van productgroep —</option>
+                  <option value="">— standaard (tenant) —</option>
                   {vatRates.map((r) => (
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
@@ -605,7 +605,7 @@ function useModalState(
     setFormCategoryId(p.category?.id ?? "");
     setFormProductGroupId(p.productGroup?.id ?? "");
     setFormIsActive(p.isActive);
-    setFormVatRateId("");
+    setFormVatRateId(p.vatRate?.id ?? "");
     setOpen(true);
   }
   function closeModal() {

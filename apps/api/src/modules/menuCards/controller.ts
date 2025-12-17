@@ -73,6 +73,31 @@ export async function listMenuCards(req: Request, res: Response) {
   }
 }
 
+export async function getMenuCardById(req: Request, res: Response) {
+  try {
+    const tenantId = getTenantIdFromRequest(req);
+    const id = req.params.id;
+    const card = await prisma.menuCard.findFirst({
+      where: { id, tenantId },
+      include: {
+        schedules: true,
+        items: {
+          include: {
+            product: { include: { category: true } },
+            variant: true,
+          },
+          orderBy: { sortOrder: "asc" },
+        },
+      },
+    });
+    if (!card) return notFound(res);
+    return res.json({ data: card });
+  } catch (err) {
+    console.error("getMenuCardById error", err);
+    return res.status(500).json({ error: { message: "INTERNAL_ERROR" } });
+  }
+}
+
 export async function activeMenuCards(req: Request, res: Response) {
   try {
     if (!prisma || typeof (prisma as any).menuCard?.findMany !== "function") {
@@ -230,6 +255,39 @@ export async function deleteSchedule(req: Request, res: Response) {
     return res.json({ data: del });
   } catch (err) {
     console.error("deleteSchedule error", err);
+    return res.status(500).json({ error: { message: "INTERNAL_ERROR" } });
+  }
+}
+
+export async function addMenuCardItem(req: Request, res: Response) {
+  try {
+    const tenantId = getTenantIdFromRequest(req);
+    const menuCardId = req.params.id;
+    const { productId, sortOrder } = req.body || {};
+
+    const details: Array<{ path: (string | number)[]; message: string }> = [];
+    if (!productId || typeof productId !== "string") details.push({ path: ["productId"], message: "Required" });
+    const so = Number(sortOrder ?? 0);
+    if (!Number.isInteger(so) || so < 0) details.push({ path: ["sortOrder"], message: ">= 0" });
+
+    const card = await prisma.menuCard.findFirst({ where: { id: menuCardId, tenantId } });
+    if (!card) return notFound(res);
+    const product = await prisma.product.findFirst({ where: { id: productId, tenantId } });
+    if (!product) details.push({ path: ["productId"], message: "Bestaat niet" });
+    if (details.length) return validationError(res, details);
+
+    const item = await prisma.menuCardItem.create({
+      data: {
+        tenantId,
+        menuCardId,
+        productId,
+        sortOrder: so,
+      },
+      include: { product: { include: { category: true } }, variant: true },
+    });
+    return res.json({ data: item });
+  } catch (err) {
+    console.error("addMenuCardItem error", err);
     return res.status(500).json({ error: { message: "INTERNAL_ERROR" } });
   }
 }

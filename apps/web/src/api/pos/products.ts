@@ -12,20 +12,21 @@ export type Product = {
 };
 
 function tenantHeaders() {
-  const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || "cafetaria-centrum";
+  const tenantId = localStorage.getItem("tenantId") || "cafetaria-centrum";
   return { headers: { "x-tenant-id": tenantId } };
 }
 
 const base = "/core/catalog/products";
 
 export async function apiListProducts(): Promise<Product[]> {
-  const res = await http.get<{ data: Product[] }>(base, tenantHeaders());
-  return res.data.data;
+  const res = await http.get<any>(base, tenantHeaders());
+  const products: Product[] = res.data?.products ?? res.data?.data ?? [];
+  return products;
 }
 
 export async function apiGetProduct(id: string): Promise<Product> {
-  const res = await http.get<{ data: Product }>(`${base}/${id}`, tenantHeaders());
-  return res.data.data;
+  const res = await http.get<any>(`${base}/${id}`, tenantHeaders());
+  return res.data?.data ?? res.data?.product;
 }
 
 export async function apiCreateProduct(payload: {
@@ -36,8 +37,8 @@ export async function apiCreateProduct(payload: {
   productGroupId?: string | null;
   vatRateId?: string | null;
 }): Promise<Product> {
-  const res = await http.post<{ data: Product }>(base, payload, tenantHeaders());
-  return res.data.data;
+  const res = await http.post<any>(base, payload, tenantHeaders());
+  return res.data?.data ?? res.data?.product;
 }
 
 export async function apiUpdateProduct(
@@ -51,8 +52,8 @@ export async function apiUpdateProduct(
     vatRateId?: string | null;
   }>
 ): Promise<Product> {
-  const res = await http.put<{ data: Product }>(`${base}/${id}`, payload, tenantHeaders());
-  return res.data.data;
+  const res = await http.put<any>(`${base}/${id}`, payload, tenantHeaders());
+  return res.data?.data ?? res.data?.product;
 }
 
 export async function apiDeleteProduct(id: string): Promise<void> {

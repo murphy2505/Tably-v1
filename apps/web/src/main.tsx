@@ -13,6 +13,7 @@ import ProductsPage from "./pages/ProductsPage";
 import AssortimentCategories from "./pages/assortiment/AssortimentCategories";
 import AssortimentCourses from "./pages/AssortimentCourses";
 import AssortimentMenus from "./pages/AssortimentMenus";
+import AssortimentMenuDetail from "./pages/AssortimentMenuDetail";
 import AssortimentRevenueGroups from "./pages/AssortimentRevenueGroups";
 
 /* Core screens */
@@ -57,6 +58,7 @@ root.render(
               <Route path="categories" element={<AssortimentCategories />} />
               <Route path="courses" element={<AssortimentCourses />} />
               <Route path="menus" element={<AssortimentMenus />} />
+              <Route path="menus/:menuId" element={<AssortimentMenuDetail />} />
               <Route path="revenue-groups" element={<AssortimentRevenueGroups />} />
             </Route>
 

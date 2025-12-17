@@ -3,6 +3,8 @@ import { asyncHandler, validationError, notFound } from "../../lib/http";
 import { prisma } from "../../lib/prisma";
 import { z } from "zod";
 import { resolveModifiersForProduct, resolveModifiersForMenuItem } from "../modifiers/controller";
+import { calculateAndPersistOrderTotals } from "./totals";
+import { resolveVatRateForOrderLine } from "./vatResolver";
 
 export const ordersRouter = Router();
 
@@ -23,13 +25,14 @@ function sseBroadcast(tenantId: string, event: string, data: any) {
   }
 }
 
-const TransitionBody = z.object({ to: z.enum(["OPEN", "SENT", "IN_PREP", "READY", "COMPLETED", "CANCELLED"]) });
+const TransitionBody = z.object({ to: z.enum(["OPEN", "SENT", "IN_PREP", "READY", "PAID", "COMPLETED", "CANCELLED"]) });
 
 const allowed: Record<string, string[]> = {
   OPEN: ["SENT", "CANCELLED"],
   SENT: ["IN_PREP", "CANCELLED"],
   IN_PREP: ["READY", "CANCELLED"],
-  READY: ["COMPLETED", "CANCELLED"],
+  READY: ["PAID", "COMPLETED", "CANCELLED"],
+  PAID: ["COMPLETED", "CANCELLED"],
   COMPLETED: [],
   CANCELLED: [],
 };
@@ -60,6 +63,7 @@ ordersRouter.post("/core/orders/:id/transition", asyncHandler(async (req, res) =
   if (to === "SENT") timestampPatch.sentAt = now;
   else if (to === "IN_PREP") timestampPatch.inPrepAt = now;
   else if (to === "READY") timestampPatch.readyAt = now;
+  else if (to === "PAID") timestampPatch.paidAt = now;
   else if (to === "COMPLETED") timestampPatch.completedAt = now;
   else if (to === "CANCELLED") timestampPatch.cancelledAt = now;
 
@@ -71,6 +75,43 @@ ordersRouter.post("/core/orders/:id/transition", asyncHandler(async (req, res) =
 
   console.log("[order.transition]", { orderId: id, from, to });
   // KDS broadcast: notify streams in this tenant
+  sseBroadcast(tenantId, "order", { type: "ORDER_UPDATED", orderId: id, status: updated.status, updatedAt: new Date().toISOString() });
+  return res.json({ order: updated });
+}));
+
+// Pay endpoint (MVP): sets status=PAID and stores basic payment info
+ordersRouter.post("/core/orders/:id/pay", asyncHandler(async (req, res) => {
+  const tenantId = req.header("x-tenant-id");
+  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+
+  const id = String(req.params.id);
+  const existing = await prisma.order.findFirst({ where: { id, tenantId }, include: { lines: true } });
+  if (!existing) return notFound(res);
+
+  // Only allow paying non-finalized orders
+  const finalStates = new Set(["PAID", "COMPLETED", "CANCELLED"]);
+  if (finalStates.has(existing.status as any)) {
+    return res.status(409).json({ error: { message: "ALREADY_FINALIZED", status: existing.status } });
+  }
+
+  const Body = z.object({
+    method: z.enum(["PIN", "CASH"]),
+    paymentRef: z.string().max(128).optional(),
+    cashReceivedCents: z.number().int().nonnegative().optional(),
+  });
+  const parsed = Body.safeParse(req.body);
+  if (!parsed.success) return validationError(res, parsed.error.issues);
+  const { method, paymentRef, cashReceivedCents } = parsed.data;
+
+  const patch: any = {
+    status: "PAID",
+    paidAt: new Date(),
+    paymentMethod: method,
+    paymentRef: paymentRef ?? (method === "PIN" ? "PIN-STUB" : null),
+    cashReceivedCents: method === "CASH" ? (cashReceivedCents ?? 0) : null,
+  };
+
+  const updated = await prisma.order.update({ where: { id }, data: patch, include: { lines: true } });
   sseBroadcast(tenantId, "order", { type: "ORDER_UPDATED", orderId: id, status: updated.status, updatedAt: new Date().toISOString() });
   return res.json({ order: updated });
 }));
@@ -88,7 +129,8 @@ ordersRouter.post("/core/orders", asyncHandler(async (req, res) => {
     data: { tenantId, status: "OPEN" as any },
     include: { lines: true },
   });
-  return res.status(201).json({ order });
+  const updated = await calculateAndPersistOrderTotals(tenantId, order.id);
+  return res.status(201).json({ order: updated ?? order });
 }));
 
 // Add or update line in order
@@ -109,10 +151,12 @@ ordersRouter.post("/core/orders/:id/lines", asyncHandler(async (req, res) => {
   if (!parsed.success) return validationError(res, parsed.error.issues);
   const { productId, variantId = null, menuItemId = null, qty = 1, selectedOptionIds = [] } = parsed.data;
 
-  // fetch product price
+  // fetch product price for base (VAT resolved separately)
   const product = await prisma.product.findFirst({ where: { id: productId, tenantId } });
   if (!product) return validationError(res, [{ path: ["productId"], message: "Onbekend product" }]);
   let priceCents = product.basePriceCents;
+  const vatResolved = await resolveVatRateForOrderLine({ tenantId, productId, menuItemId });
+  const vatRateBps = vatResolved.vatRateBps;
     // Sort selected options deterministically and build signature
     const selectedOptionIdsSorted = [...selectedOptionIds].sort();
     const modifierSignature = selectedOptionIdsSorted.join(",");
@@ -169,12 +213,11 @@ ordersRouter.post("/core/orders/:id/lines", asyncHandler(async (req, res) => {
   if (match) {
     await prisma.orderLine.update({ where: { id: match.id }, data: { qty: match.qty + qty } });
   } else {
-    await prisma.orderLine.create({ data: { tenantId, orderId: id, title, qty, priceCents, modifiers: { groups: snapshotGroups, deltaCentsTotal } as any } });
+    await prisma.orderLine.create({ data: { tenantId, orderId: id, title, qty, priceCents, vatRateBps, vatSource: vatResolved.source, modifiers: { groups: snapshotGroups, deltaCentsTotal } as any } });
   }
 
-  const order = await prisma.order.findFirst({ where: { id, tenantId }, include: { lines: true } });
-  // lines is always an array due to include; enforce shape
-  return res.json({ order });
+  const updated = await calculateAndPersistOrderTotals(tenantId, id);
+  return res.json({ order: updated! });
 }));
 
 // Smoke test scenario (comments):

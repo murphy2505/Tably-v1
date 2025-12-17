@@ -381,7 +381,8 @@ export async function listProducts(req: Request, res: Response) {
     if (process.env.DEBUG_API === "1") {
       console.log("[catalog.products]", { tenantId, count: rows.length });
     }
-    return res.json({ products: rows });
+    // Defensive: return both shapes for clients
+    return res.json({ data: rows, products: rows });
   } catch (err) {
     console.error("listProducts error", err);
     return res.status(500).json({ error: { message: "INTERNAL_ERROR" } });
@@ -450,7 +451,8 @@ export async function createProduct(req: Request, res: Response) {
       },
     });
 
-    return res.json({ data: prod });
+    // Defensive: return both shapes for clients
+    return res.json({ data: prod, product: prod });
   } catch (err) {
     console.error("createProduct error", err);
     return res.status(500).json({ error: { message: "INTERNAL_ERROR" } });

@@ -95,7 +95,7 @@ export function App() {
     const t = setTimeout(() => setToast(null), 3000);
     return () => clearTimeout(t);
   }, [toast]);
-  const totalCents = activeOrder ? activeOrder.lines.reduce((s, l) => s + l.qty * l.priceCents, 0) : 0;
+  const totalCents = activeOrder ? activeOrder.totalInclVatCents : 0;
   const itemsCount = activeOrder ? activeOrder.lines.reduce((s, l) => s + l.qty, 0) : 0;
 
   // last receipt is handled via LastReceiptTrigger component
@@ -279,7 +279,20 @@ export function App() {
               </div>
 
               <div className="bon-meta">
-                <div>BTW: —</div>
+                <div>
+                  BTW: {activeOrder?.vatBreakdown
+                    ? (() => {
+                        const vals = Object.values(activeOrder.vatBreakdown || {});
+                        if (!vals || vals.length === 0) return "—";
+                        const parts = vals
+                          .sort((a, b) => a.rateBps - b.rateBps)
+                          .filter((b) => (b?.vatCents ?? 0) > 0)
+                          .map((b) => `${(b.rateBps / 100).toFixed(0)}% ${formatEuro(b.vatCents)}`);
+                        return parts.length > 0 ? parts.join(" • ") : formatEuro(0);
+                      })()
+                    : "—"}
+                </div>
+                <div>Subtotaal excl. btw: {activeOrder ? formatEuro(activeOrder.subtotalExclVatCents) : "—"}</div>
                 <div>Items: {itemsCount}</div>
               </div>
             </div>
@@ -290,7 +303,14 @@ export function App() {
               ) : (
                 activeOrder.lines.map((l) => (
                   <div key={l.id} className="order-line">
-                    <div className="order-line-title">{l.title}</div>
+                    <div className="order-line-title">
+                      {l.title}
+                      {l.vatSource === "MENUITEM" && (
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>
+                          BTW (override)
+                        </div>
+                      )}
+                    </div>
                     <div className="order-line-meta">
                       <span className="qty">{l.qty}×</span>
                       <span className="line-total">{formatEuro(l.qty * l.priceCents)}</span>

@@ -5,13 +5,15 @@ function tenantHeaders() {
   return { headers: { "x-tenant-id": tenantId } };
 }
 
-export type OrderStatus = "OPEN" | "SENT" | "IN_PREP" | "READY" | "COMPLETED" | "CANCELLED";
+export type OrderStatus = "OPEN" | "SENT" | "IN_PREP" | "READY" | "PAID" | "COMPLETED" | "CANCELLED";
 
 export type OrderLineDTO = {
   id: string;
   title: string;
   qty: number;
   priceCents: number;
+  vatRateBps?: number;
+  vatSource?: "MENUITEM" | "PRODUCT" | "TENANT";
 };
 
 export type OrderDTO = {
@@ -21,9 +23,16 @@ export type OrderDTO = {
   sentAt?: string | null;
   inPrepAt?: string | null;
   readyAt?: string | null;
+  paidAt?: string | null;
   completedAt?: string | null;
   cancelledAt?: string | null;
+  paymentMethod?: "PIN" | "CASH" | null;
+  paymentRef?: string | null;
+  cashReceivedCents?: number | null;
   lines: OrderLineDTO[];
+  subtotalExclVatCents: number;
+  totalInclVatCents: number;
+  vatBreakdown?: Record<string, { rateBps: number; grossCents: number; netCents: number; vatCents: number }>;
 };
 
 export async function apiTransitionOrder(orderId: string, to: OrderStatus): Promise<OrderDTO> {
@@ -57,5 +66,13 @@ export async function apiAddOrderLine(orderId: string, productId: string, qty: n
   if (selectedOptionIds && selectedOptionIds.length > 0) payload.selectedOptionIds = selectedOptionIds;
   if (menuItemId) payload.menuItemId = menuItemId;
   const res = await http.post<{ order: OrderDTO }>(`/core/orders/${orderId}/lines`, payload, tenantHeaders());
+  return res.data.order;
+}
+
+export async function apiPayOrder(
+  orderId: string,
+  payload: { method: "PIN"; paymentRef?: string } | { method: "CASH"; cashReceivedCents: number }
+): Promise<OrderDTO> {
+  const res = await http.post<{ order: OrderDTO }>(`/core/orders/${orderId}/pay`, payload as any, tenantHeaders());
   return res.data.order;
 }
