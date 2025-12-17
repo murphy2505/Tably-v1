@@ -24,6 +24,7 @@ export async function fetchActivePosMenu(_signal?: AbortSignal): Promise<ActiveP
       product: it.product,
       variant: it.variant,
       course: null,
+      modifierGroups: it.modifierGroups ?? [],
     }));
   const dto: PosMenuDTO = {
     id: cards[0].id,

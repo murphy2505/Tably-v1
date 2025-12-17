@@ -25,6 +25,13 @@ export type PosMenuItemDTO = {
   product: PosProductDTO;
   variant: PosVariantDTO;
   course: PosCourseDTO;
+  modifierGroups?: Array<{
+    id: string;
+    name: string;
+    minSelect: number;
+    maxSelect: number;
+    options: Array<{ id: string; name: string; priceDeltaCents: number }>;
+  }>;
 };
 
 export type PosMenuDTO = {

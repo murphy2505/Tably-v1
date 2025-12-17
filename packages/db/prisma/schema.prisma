@@ -29,17 +29,26 @@ model Tenant {
   name      String
   createdAt DateTime @default(now())
 
-  revenueGroups RevenueGroup[]
-  productGroups ProductGroup[]
-  categories    Category[]
-  products      Product[]
-  variants      ProductVariant[]
-  menus         Menu[]
-  courses       Course[]
-  menuItems     MenuItem[]
-  vatRates      VatRate[]
-  orders        Order[]
-  orderLines    OrderLine[]
+  revenueGroups              RevenueGroup[]
+  productGroups              ProductGroup[]
+  categories                 Category[]
+  products                   Product[]
+  variants                   ProductVariant[]
+  menus                      Menu[]
+  courses                    Course[]
+  menuItems                  MenuItem[]
+  vatRates                   VatRate[]
+  orders                     Order[]
+  orderLines                 OrderLine[]
+  // New back-relations
+  modifierGroups             ModifierGroup[]
+  modifierOptions            ModifierOption[]
+  productModifierGroups      ProductModifierGroup[]
+  menuCards                  MenuCard[]
+  menuCardSchedules          MenuCardSchedule[]
+  menuCardItems              MenuCardItem[]
+  menuCardItemModifierGroups MenuCardItemModifierGroup[]
+  settings                   TenantSettings?
 }
 
 model RevenueGroup {
@@ -150,8 +159,10 @@ model Product {
   revenueGroup RevenueGroup? @relation(fields: [revenueGroupId], references: [id], onDelete: SetNull)
   vatRate      VatRate?      @relation(fields: [vatRateId], references: [id], onDelete: SetNull)
 
-  variants  ProductVariant[]
-  menuItems MenuItem[]
+  variants              ProductVariant[]
+  menuItems             MenuItem[]
+  productModifierGroups ProductModifierGroup[]
+  MenuCardItem          MenuCardItem[]
 
   @@index([tenantId, productGroupId])
   @@index([tenantId, categoryId])
@@ -160,52 +171,54 @@ model Product {
 }
 
 model ProductVariant {
-  id        String  @id @default(cuid())
-  tenantId  String
-  productId String
-  name      String
+  id                 String  @id @default(cuid())
+  tenantId           String
+  productId          String
+  name               String
   priceOverrideCents Int?
-  sortOrder Int     @default(0)
-  isActive  Boolean @default(true)
+  sortOrder          Int     @default(0)
+  isActive           Boolean @default(true)
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  menuItems MenuItem[]
+  menuItems     MenuItem[]
+  menuCardItems MenuCardItem[]
 
   @@index([tenantId, productId, sortOrder])
 }
 
 // New: Modifiers MVP
 model ModifierGroup {
-  id        String @id @default(cuid())
+  id        String   @id @default(cuid())
   tenantId  String
   name      String
-  minSelect Int    @default(0)
-  maxSelect Int    @default(1)
-  isActive  Boolean @default(true)
-  sortOrder Int @default(0)
+  minSelect Int      @default(0)
+  maxSelect Int      @default(1)
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  options ModifierOption[]
-  products ProductModifierGroup[]
+  tenant                    Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  options                   ModifierOption[]
+  products                  ProductModifierGroup[]
+  MenuCardItemModifierGroup MenuCardItemModifierGroup[]
 
   @@index([tenantId, isActive, sortOrder])
 }
 
 model ModifierOption {
-  id        String @id @default(cuid())
-  tenantId  String
-  groupId   String
-  name      String
-  priceDeltaCents Int @default(0)
-  isActive  Boolean @default(true)
-  sortOrder Int @default(0)
+  id              String  @id @default(cuid())
+  tenantId        String
+  groupId         String
+  name            String
+  priceDeltaCents Int     @default(0)
+  isActive        Boolean @default(true)
+  sortOrder       Int     @default(0)
 
-  group ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  group  ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, groupId, isActive, sortOrder])
 }
@@ -215,10 +228,10 @@ model ProductModifierGroup {
   tenantId  String
   productId String
   groupId   String
-  sortOrder Int @default(0)
+  sortOrder Int    @default(0)
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenant  Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
   group   ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, productId, groupId])
@@ -291,7 +304,7 @@ model MenuCard {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @default(now()) @updatedAt
 
-  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   schedules MenuCardSchedule[]
   items     MenuCardItem[]
 
@@ -299,10 +312,10 @@ model MenuCard {
 }
 
 model MenuCardSchedule {
-  id         String   @id @default(cuid())
+  id         String  @id @default(cuid())
   tenantId   String
   menuCardId String
-  enabled    Boolean  @default(true)
+  enabled    Boolean @default(true)
   dayOfWeek  Int
   startTime  String
   endTime    String
@@ -314,49 +327,70 @@ model MenuCardSchedule {
 }
 
 model MenuCardItem {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   tenantId   String
   menuCardId String
   productId  String?
   variantId  String?
-  sortOrder  Int    @default(0)
+  sortOrder  Int     @default(0)
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  menuCard MenuCard @relation(fields: [menuCardId], references: [id], onDelete: Cascade)
-  product  Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  menuCard MenuCard        @relation(fields: [menuCardId], references: [id], onDelete: Cascade)
+  product  Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
   variant  ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  // Attach modifier groups to this menu card item
+  modifierGroups MenuCardItemModifierGroup[]
 
   @@index([tenantId, menuCardId, sortOrder])
 }
 
-model Order {
-  id        String      @id @default(cuid())
-  tenantId  String
-  status    OrderStatus @default(OPEN)
+model MenuCardItemModifierGroup {
+  id                String  @id @default(cuid())
+  tenantId          String
+  menuCardItemId    String
+  groupId           String
+  sortOrder         Int     @default(0)
+  isActive          Boolean @default(true)
+  minSelectOverride Int?
+  maxSelectOverride Int?
 
-  sentAt       DateTime?
-  inPrepAt     DateTime?
-  readyAt      DateTime?
-  completedAt  DateTime?
-  cancelledAt  DateTime?
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item   MenuCardItem  @relation(fields: [menuCardItemId], references: [id], onDelete: Cascade)
+  group  ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, menuCardItemId, groupId])
+  @@index([tenantId, menuCardItemId, isActive, sortOrder])
+}
+
+model Order {
+  id       String      @id @default(cuid())
+  tenantId String
+  status   OrderStatus @default(OPEN)
+
+  sentAt      DateTime?
+  inPrepAt    DateTime?
+  readyAt     DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lines  OrderLine[]
 
   @@index([tenantId, status])
 }
 
 model OrderLine {
-  id        String @id @default(cuid())
-  tenantId  String
-  orderId   String
-  title     String
-  qty       Int
+  id         String @id @default(cuid())
+  tenantId   String
+  orderId    String
+  title      String
+  qty        Int
   priceCents Int
-  modifiers Json?
+  modifiers  Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -368,15 +402,15 @@ model OrderLine {
 }
 
 model TenantSettings {
-  id               String  @id @default(cuid())
-  tenantId         String  @unique
-  webshopEnabled   Boolean @default(true)
-  webshopTimezone  String  @default("Europe/Amsterdam")
-  openingHours     Json
-  closures         Json
-  messageClosed    String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @default(now()) @updatedAt
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  webshopEnabled  Boolean  @default(true)
+  webshopTimezone String   @default("Europe/Amsterdam")
+  openingHours    Json
+  closures        Json
+  messageClosed   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }

@@ -52,7 +52,10 @@ export async function apiCreateOrder(payload?: { tableId?: string | null }): Pro
   return res.data.order;
 }
 
-export async function apiAddOrderLine(orderId: string, productId: string, qty: number = 1): Promise<OrderDTO> {
-  const res = await http.post<{ order: OrderDTO }>(`/core/orders/${orderId}/lines`, { productId, qty }, tenantHeaders());
+export async function apiAddOrderLine(orderId: string, productId: string, qty: number = 1, selectedOptionIds?: string[], menuItemId?: string): Promise<OrderDTO> {
+  const payload: any = { productId, qty };
+  if (selectedOptionIds && selectedOptionIds.length > 0) payload.selectedOptionIds = selectedOptionIds;
+  if (menuItemId) payload.menuItemId = menuItemId;
+  const res = await http.post<{ order: OrderDTO }>(`/core/orders/${orderId}/lines`, payload, tenantHeaders());
   return res.data.order;
 }

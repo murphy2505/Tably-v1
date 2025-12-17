@@ -10,6 +10,9 @@
     "apps/*",
     "packages/*"
   ],
+  "prisma": {
+    "seed": "ts-node packages/db/prisma/seed.ts"
+  },
   "scripts": {
     "dev": "npm -w packages/db run build && npm -w apps/api run dev",
     "dev:web": "npm -w apps/web run dev",
@@ -20,5 +23,10 @@
     "prisma:generate": "npm --workspace packages/db run prisma:generate",
     "db:migrate": "npm --workspace packages/db run prisma:migrate",
     "db:seed": "npm --workspace packages/db run prisma:seed"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
   }
 }

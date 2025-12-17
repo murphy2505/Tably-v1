@@ -2,7 +2,7 @@ import { Router, Response } from "express";
 import { asyncHandler, validationError, notFound } from "../../lib/http";
 import { prisma } from "../../lib/prisma";
 import { z } from "zod";
-import { resolveModifiersForProduct } from "../modifiers/controller";
+import { resolveModifiersForProduct, resolveModifiersForMenuItem } from "../modifiers/controller";
 
 export const ordersRouter = Router();
 
@@ -104,10 +104,10 @@ ordersRouter.post("/core/orders/:id/lines", asyncHandler(async (req, res) => {
   const existing = await prisma.order.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
 
-  const Body = z.object({ productId: z.string(), variantId: z.string().nullable().optional(), qty: z.number().int().positive().optional(), selectedOptionIds: z.array(z.string()).optional() });
+  const Body = z.object({ productId: z.string(), variantId: z.string().nullable().optional(), menuItemId: z.string().nullable().optional(), qty: z.number().int().positive().optional(), selectedOptionIds: z.array(z.string()).optional() });
   const parsed = Body.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
-  const { productId, variantId = null, qty = 1, selectedOptionIds = [] } = parsed.data;
+  const { productId, variantId = null, menuItemId = null, qty = 1, selectedOptionIds = [] } = parsed.data;
 
   // fetch product price
   const product = await prisma.product.findFirst({ where: { id: productId, tenantId } });
@@ -116,8 +116,8 @@ ordersRouter.post("/core/orders/:id/lines", asyncHandler(async (req, res) => {
     // Sort selected options deterministically and build signature
     const selectedOptionIdsSorted = [...selectedOptionIds].sort();
     const modifierSignature = selectedOptionIdsSorted.join(",");
-  // Resolve attached modifier groups and validate selections
-  const groups = await resolveModifiersForProduct(tenantId, productId);
+  // Resolve attached modifier groups (prefer menu item overrides)
+  const groups = menuItemId ? await resolveModifiersForMenuItem(tenantId, menuItemId) : await resolveModifiersForProduct(tenantId, productId);
   const selectedSet = new Set(selectedOptionIds);
   const snapshotGroups: any[] = [];
   let deltaCentsTotal = 0;

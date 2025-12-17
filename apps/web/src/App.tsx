@@ -118,6 +118,7 @@ export function App() {
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetProduct, setSheetProduct] = useState<{ id: string; name: string; priceCents: number } | null>(null);
+  const [sheetMenuItemId, setSheetMenuItemId] = useState<string | null>(null);
   const [sheetGroups, setSheetGroups] = useState<Array<{ id: string; name: string; minSelect: number; maxSelect: number; options: { id: string; name: string; priceDeltaCents: number }[] }>>([]);
 
   async function addItemToOrder(item: PosMenuDTO["items"][number]) {
@@ -131,20 +132,30 @@ export function App() {
         syncLocalStoreFromOrder(created);
       }
       const pid = item.product.id; // product id
-      // Check modifiers
+      // Prefer per-item modifier groups from active menu
+      const embeddedGroups = (item as any).modifierGroups || [];
+      if (embeddedGroups.length > 0) {
+        setSheetProduct({ id: pid, name: item.product.name, priceCents: item.priceCents });
+        setSheetGroups(embeddedGroups);
+        setSheetMenuItemId(item.id);
+        setSheetOpen(true);
+        return; // wait for confirm
+      }
+      // Fallback to product-level groups
       try {
         const resp = await apiGetProductModifierGroups(pid);
         const groups = resp.groups || [];
         if (groups.length > 0) {
           setSheetProduct({ id: pid, name: item.product.name, priceCents: item.priceCents });
           setSheetGroups(groups);
+          setSheetMenuItemId(null);
           setSheetOpen(true);
           return; // wait for confirm
         }
       } catch (_e) {
-        // If fetching modifiers fails, fall back to instant add
+        // ignore; proceed to add without modifiers
       }
-      const updated = await apiAddOrderLine(targetOrderId!, pid, 1);
+      const updated = await apiAddOrderLine(targetOrderId!, pid, 1, undefined, item.id);
       setActiveOrder(updated);
       syncLocalStoreFromOrder(updated);
     } catch (e) {
@@ -390,7 +401,7 @@ export function App() {
             setSheetOpen(false);
             if (!activeOrderId) return;
             try {
-              const updated = await apiAddOrderLine(activeOrderId, sheetProduct.id, 1, selectedOptionIds);
+              const updated = await apiAddOrderLine(activeOrderId, sheetProduct.id, 1, selectedOptionIds, sheetMenuItemId || undefined);
               setActiveOrder(updated);
               syncLocalStoreFromOrder(updated);
             } catch (e) {

@@ -133,3 +133,18 @@ export async function getProductModifierGroups(req: Request, res: Response) {
   }
   return res.json({ groups });
 }
+
+export async function resolveModifiersForMenuItem(tenantId: string, menuItemId: string) {
+  const rows = await prisma.menuCardItemModifierGroup.findMany({
+    where: { tenantId, menuCardItemId: menuItemId, isActive: true },
+    orderBy: { sortOrder: "asc" },
+    include: { group: { include: { options: { where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] } } } },
+  });
+  return rows.map((r) => ({
+    id: r.group.id,
+    name: r.group.name,
+    minSelect: r.minSelectOverride ?? r.group.minSelect ?? 0,
+    maxSelect: r.maxSelectOverride ?? r.group.maxSelect ?? 1,
+    options: r.group.options,
+  }));
+}

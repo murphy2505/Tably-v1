@@ -288,29 +288,59 @@ async function main() {
     });
   }
 
-  // Modifiers: Sauzen group with options, attach to Friet
-  const grpSauzen = await prisma.modifierGroup.create({
-    data: {
-      tenantId: DEFAULT_TENANT_ID,
-      name: "Sauzen",
-      minSelect: 0,
-      maxSelect: 1,
-      sortOrder: 1,
-      isActive: true,
-    },
+  // Modifiers: Sauzen group with options (idempotent), attach to all Friet sizes (MenuCardItems)
+  const grpSauzen = await prisma.modifierGroup.upsert({
+    where: { id: `${DEFAULT_TENANT_ID}-grp-sauzen` },
+    update: { name: "Sauzen", minSelect: 1, maxSelect: 1, isActive: true, sortOrder: 1 },
+    create: { id: `${DEFAULT_TENANT_ID}-grp-sauzen`, tenantId: DEFAULT_TENANT_ID, name: "Sauzen", minSelect: 1, maxSelect: 1, sortOrder: 1, isActive: true },
   });
-  const optMayo = await prisma.modifierOption.create({
-    data: { tenantId: DEFAULT_TENANT_ID, groupId: grpSauzen.id, name: "Mayo", priceDeltaCents: 0, sortOrder: 1, isActive: true },
+  await prisma.modifierOption.upsert({
+    where: { id: `${DEFAULT_TENANT_ID}-opt-mayo` },
+    update: { name: "Mayo", priceDeltaCents: 0, isActive: true, sortOrder: 1, groupId: grpSauzen.id, tenantId: DEFAULT_TENANT_ID },
+    create: { id: `${DEFAULT_TENANT_ID}-opt-mayo`, tenantId: DEFAULT_TENANT_ID, groupId: grpSauzen.id, name: "Mayo", priceDeltaCents: 0, sortOrder: 1, isActive: true },
   });
-  const optCurry = await prisma.modifierOption.create({
-    data: { tenantId: DEFAULT_TENANT_ID, groupId: grpSauzen.id, name: "Curry", priceDeltaCents: 0, sortOrder: 2, isActive: true },
+  await prisma.modifierOption.upsert({
+    where: { id: `${DEFAULT_TENANT_ID}-opt-curry` },
+    update: { name: "Curry", priceDeltaCents: 0, isActive: true, sortOrder: 2, groupId: grpSauzen.id, tenantId: DEFAULT_TENANT_ID },
+    create: { id: `${DEFAULT_TENANT_ID}-opt-curry`, tenantId: DEFAULT_TENANT_ID, groupId: grpSauzen.id, name: "Curry", priceDeltaCents: 0, sortOrder: 2, isActive: true },
   });
-  const optSpeciaal = await prisma.modifierOption.create({
-    data: { tenantId: DEFAULT_TENANT_ID, groupId: grpSauzen.id, name: "Speciaal", priceDeltaCents: 50, sortOrder: 3, isActive: true },
+  await prisma.modifierOption.upsert({
+    where: { id: `${DEFAULT_TENANT_ID}-opt-joppie` },
+    update: { name: "Joppie", priceDeltaCents: 50, isActive: true, sortOrder: 3, groupId: grpSauzen.id, tenantId: DEFAULT_TENANT_ID },
+    create: { id: `${DEFAULT_TENANT_ID}-opt-joppie`, tenantId: DEFAULT_TENANT_ID, groupId: grpSauzen.id, name: "Joppie", priceDeltaCents: 50, sortOrder: 3, isActive: true },
   });
-  await prisma.productModifierGroup.create({
-    data: { tenantId: DEFAULT_TENANT_ID, productId: pFriet.id, groupId: grpSauzen.id, sortOrder: 1 },
+
+  // Find MenuCardItems for Friet sizes
+  const frietItems = await prisma.menuCardItem.findMany({
+    where: { tenantId: DEFAULT_TENANT_ID, menuCardId: card.id, productId: pFriet.id, variantId: { in: [vFrietK.id, vFrietM.id, vFrietG.id] } },
+    orderBy: { sortOrder: "asc" },
   });
+  const attachedLabels: string[] = [];
+  for (const it of frietItems) {
+    // Ensure idempotent link: unique by (tenantId, menuCardItemId, groupId)
+    const uniqueKey = { tenantId_menuCardItemId_groupId: { tenantId: DEFAULT_TENANT_ID, menuCardItemId: it.id, groupId: grpSauzen.id } } as any;
+    const existingLink = await prisma.menuCardItemModifierGroup.findUnique({ where: uniqueKey });
+    if (!existingLink) {
+      await prisma.menuCardItemModifierGroup.create({
+        data: {
+          tenantId: DEFAULT_TENANT_ID,
+          menuCardItemId: it.id,
+          groupId: grpSauzen.id,
+          sortOrder: 1,
+          isActive: true,
+          minSelectOverride: null,
+          maxSelectOverride: null,
+        },
+      });
+    }
+    // Determine human label based on variant
+    let label = "Friet";
+    if (it.variantId === vFrietK.id) label = "Friet Klein";
+    else if (it.variantId === vFrietM.id) label = "Friet Middel";
+    else if (it.variantId === vFrietG.id) label = "Friet Groot";
+    attachedLabels.push(label);
+  }
+  console.log(`Attached Sauzen to: ${attachedLabels.join(", ")}`);
 
   console.log("Seed complete for tenant:", DEFAULT_TENANT_ID);
 

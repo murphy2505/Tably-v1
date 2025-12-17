@@ -89,7 +89,24 @@ export async function activeMenuCards(req: Request, res: Response) {
       orderBy: { sortOrder: "asc" },
       include: {
         schedules: true,
-        items: { include: { product: { include: { vatRate: true } }, variant: true }, orderBy: { sortOrder: "asc" } },
+        items: {
+          include: {
+            product: { include: { vatRate: true } },
+            variant: true,
+            modifierGroups: {
+              where: { isActive: true },
+              orderBy: { sortOrder: "asc" },
+              include: {
+                group: {
+                  include: {
+                    options: { where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] },
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { sortOrder: "asc" },
+        },
       },
     });
 
@@ -113,6 +130,13 @@ export async function activeMenuCards(req: Request, res: Response) {
         } : null,
         variant: it.variant ? { id: it.variant.id, name: it.variant.name } : null,
         priceCents: (it.variant?.priceOverrideCents ?? it.product?.basePriceCents ?? 0),
+        modifierGroups: (it.modifierGroups || []).map((mg: any) => ({
+          id: mg.group.id,
+          name: mg.group.name,
+          minSelect: (mg.minSelectOverride ?? mg.group.minSelect ?? 0),
+          maxSelect: (mg.maxSelectOverride ?? mg.group.maxSelect ?? 1),
+          options: (mg.group.options || []).map((o: any) => ({ id: o.id, name: o.name, priceDeltaCents: o.priceDeltaCents })),
+        })),
       }))
     })) });
   } catch (err) {
