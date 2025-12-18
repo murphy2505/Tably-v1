@@ -10,6 +10,7 @@ import { menuCardsRouter } from "./modules/menuCards/routes";
 import { webshopRouter } from "./modules/webshop/routes";
 import { modifiersRouter } from "./modules/modifiers/routes";
 import { errorMiddleware, serviceUnavailable } from "./lib/http";
+import printRouter from "./routes/print";
 import { prisma } from "./lib/prisma";
 import { ensureTenant } from "./ensureTenant";
 
@@ -81,6 +82,7 @@ export function createServer() {
   app.use("/", menuCardsRouter);
   app.use("/", webshopRouter);
   app.use("/", ordersRouter);
+  app.use("/print", printRouter);
 
   app.use(errorMiddleware);
 

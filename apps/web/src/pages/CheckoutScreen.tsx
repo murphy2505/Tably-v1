@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { useOrders } from "../stores/ordersStore";
 import { usePosSession } from "../stores/posSessionStore";
-import { apiGetOrder, apiPayOrder } from "../api/pos/orders";
+import { apiCreateOrder, apiGetOrder, apiPayOrder } from "../api/pos/orders";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -19,7 +19,7 @@ export default function CheckoutScreen() {
   const { state } = useLocation();
   const nav = (state || {}) as Partial<CheckoutState>;
   const { orders, getTotalCents } = useOrders();
-  const { clearActiveOrder } = usePosSession();
+  const { setActiveOrderId, clearActiveOrder } = usePosSession();
 
   let orderId: string | undefined = undefined;
   if (nav && (nav as any).orderId) orderId = (nav as any).orderId as string;
@@ -143,9 +143,20 @@ export default function CheckoutScreen() {
   function onAbort() {
     navigate("/pos");
   }
-  function onDone() {
-    clearActiveOrder();
-    navigate("/pos");
+  const [creatingNext, setCreatingNext] = useState(false);
+  async function onDone() {
+    if (creatingNext) return;
+    try {
+      setCreatingNext(true);
+      const created = await apiCreateOrder();
+      setActiveOrderId(created.id);
+      navigate("/pos");
+    } catch (_e) {
+      // Fallback: still return to POS; cashier can create manually
+      navigate("/pos");
+    } finally {
+      setCreatingNext(false);
+    }
   }
 
   // Missing state case
@@ -274,7 +285,7 @@ export default function CheckoutScreen() {
               disabled={
                 (view === "CASH_HELP" && receivedCents < totalCents) ||
                 (view === "CHECKOUT_IDLE" && method == null) ||
-                submitting
+                submitting || creatingNext
               }
             >
               {view === "CHECKOUT_COMPLETE" ? "Gereed (volgende klant)" : "Bevestig"}
