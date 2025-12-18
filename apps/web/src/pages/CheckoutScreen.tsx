@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useOrders } from "../stores/ordersStore";
 import { usePosSession } from "../stores/posSessionStore";
 import { apiCreateOrder, apiGetOrder, apiPayOrder } from "../api/pos/orders";
+import { apiPrintOrder, apiPrintQr } from "../api/print";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -104,6 +105,8 @@ export default function CheckoutScreen() {
   }, [method, view, totalCents]);
 
   const [toast, setToast] = useState<string | null>(null);
+  const [printingOrder, setPrintingOrder] = useState(false);
+  const [printingQr, setPrintingQr] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -270,8 +273,43 @@ export default function CheckoutScreen() {
                 <div>Methode: {methodLabel(method)}</div>
                 <div>Totaal: {formatEuro(totalCents)}</div>
                 <div className="complete-actions">
-                  <button className="btn" onClick={() => console.log("print")}>Print bon</button>
-                  <button className="btn" onClick={() => console.log("mail")}>Mail bon</button>
+                  <button
+                    className="btn"
+                    disabled={printingOrder}
+                    onClick={async () => {
+                      if (!orderId) return;
+                      try {
+                        setPrintingOrder(true);
+                        await apiPrintOrder(orderId);
+                        setToast("Geprint");
+                      } catch (e: any) {
+                        setToast(e?.message || "Print mislukt");
+                      } finally {
+                        setPrintingOrder(false);
+                      }
+                    }}
+                  >
+                    {printingOrder ? "Printen…" : "Print laatste bon"}
+                  </button>
+                  <button
+                    className="btn"
+                    disabled={printingQr}
+                    onClick={async () => {
+                      if (!orderId) return;
+                      try {
+                        setPrintingQr(true);
+                        const qrText = `tably://loyalty/demo/order/${orderId}`;
+                        await apiPrintQr(qrText, { title: "Spaarkaart", subtitle: "Scan om punten te sparen" });
+                        setToast("Geprint");
+                      } catch (e: any) {
+                        setToast(e?.message || "Print mislukt");
+                      } finally {
+                        setPrintingQr(false);
+                      }
+                    }}
+                  >
+                    {printingQr ? "Printen…" : "Print QR klantenkaart"}
+                  </button>
                 </div>
               </div>
             )}

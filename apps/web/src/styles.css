@@ -473,21 +473,6 @@ body {
 .btn.primary { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
 .btn.primary:hover { background: #dbeafe; }
 
-/* =========================
-   POS Bottom Bar
-========================= */
-.pos-bottombar{
-  position: sticky;
-  bottom: 0;
-  z-index: 50;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  padding: 10px;
-  background: rgba(255,255,255,0.92);
-  border-top: 1px solid #e5e7eb;
-  backdrop-filter: blur(10px);
-}
 
 .bar-btn{
   height: 52px;
@@ -1013,3 +998,50 @@ body {
   cursor: not-allowed;
 }
 
+/* ===== FIX: Edge/iPhone vh bug (Last receipt / checkout modal) ===== */
+
+.checkout-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+/* use dvh so it never goes under browser UI */
+.checkout-modal {
+  width: min(420px, 100%);
+  max-height: calc(100dvh - 32px - env(safe-area-inset-bottom));
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* fallback for older browsers */
+@supports not (height: 100dvh) {
+  .checkout-modal {
+    max-height: calc(100vh - 32px - env(safe-area-inset-bottom));
+  }
+}
+
+/* ===== Bigger checkout modal ===== */
+.checkout-modal{
+  max-width: 680px;          /* was 420px */
+  width: min(680px, 100%);   /* blijft netjes op mobiel */
+}
+
+/* iPad / desktop: nog wat breder */
+@media (min-width: 900px){
+  .checkout-modal{
+    max-width: 820px;
+    width: min(820px, 92vw);
+  }
+}
+
+@media (min-width: 900px){
+  .checkout-modal{
+    max-width: 1100px;
+    width: min(1100px, 94vw);
+  }
+}

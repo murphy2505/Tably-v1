@@ -30,7 +30,9 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
+    "canvas": "^3.2.0",
     "escpos": "^3.0.0-alpha.6",
-    "escpos-network": "^3.0.0-alpha.5"
+    "escpos-network": "^3.0.0-alpha.5",
+    "qrcode": "^1.5.4"
   }
 }
