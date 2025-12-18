@@ -1,8 +1,10 @@
 import { Router, Response } from "express";
-import { asyncHandler, validationError, notFound } from "../../lib/http";
+import { asyncHandler, notFound } from "../../lib/http";
 import { prisma } from "../../lib/prisma";
 import { z } from "zod";
+import { getTenantIdFromRequest } from "../../tenant";
 import { resolveModifiersForProduct, resolveModifiersForMenuItem } from "../modifiers/controller";
+import { issueReceiptNumberTx } from "./receipt";
 import { calculateAndPersistOrderTotals } from "./totals";
 import { resolveVatRateForOrderLine } from "./vatResolver";
 
@@ -38,8 +40,8 @@ const allowed: Record<string, string[]> = {
 };
 
 ordersRouter.post("/core/orders/:id/transition", asyncHandler(async (req, res) => {
-  const tenantId = req.header("x-tenant-id");
-  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
   console.log("[transition]", { id: req.params.id, tenantId });
 
@@ -81,8 +83,8 @@ ordersRouter.post("/core/orders/:id/transition", asyncHandler(async (req, res) =
 
 // Pay endpoint (MVP): sets status=PAID and stores basic payment info
 ordersRouter.post("/core/orders/:id/pay", asyncHandler(async (req, res) => {
-  const tenantId = req.header("x-tenant-id");
-  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
   const id = String(req.params.id);
   const existing = await prisma.order.findFirst({ where: { id, tenantId }, include: { lines: true } });
@@ -103,23 +105,29 @@ ordersRouter.post("/core/orders/:id/pay", asyncHandler(async (req, res) => {
   if (!parsed.success) return validationError(res, parsed.error.issues);
   const { method, paymentRef, cashReceivedCents } = parsed.data;
 
-  const patch: any = {
-    status: "PAID",
-    paidAt: new Date(),
-    paymentMethod: method,
-    paymentRef: paymentRef ?? (method === "PIN" ? "PIN-STUB" : null),
-    cashReceivedCents: method === "CASH" ? (cashReceivedCents ?? 0) : null,
-  };
-
-  const updated = await prisma.order.update({ where: { id }, data: patch, include: { lines: true } });
+  const now = new Date();
+  const updated = await prisma.$transaction(async (tx) => {
+    const patch: any = {
+      status: "PAID",
+      paidAt: now,
+      paymentMethod: method,
+      paymentRef: paymentRef ?? (method === "PIN" ? "PIN-STUB" : null),
+      cashReceivedCents: method === "CASH" ? (cashReceivedCents ?? 0) : null,
+    };
+    const paid = await tx.order.update({ where: { id }, data: patch, include: { lines: true } });
+    // Issue receipt number if not yet present
+    const hasReceipt = !!paid.receiptIssuedAt;
+    const finalOrder = hasReceipt ? paid : await issueReceiptNumberTx(tx as any, tenantId, id, now);
+    return finalOrder;
+  });
   sseBroadcast(tenantId, "order", { type: "ORDER_UPDATED", orderId: id, status: updated.status, updatedAt: new Date().toISOString() });
   return res.json({ order: updated });
 }));
 
 // Create new OPEN order
 ordersRouter.post("/core/orders", asyncHandler(async (req, res) => {
-  const tenantId = req.header("x-tenant-id");
-  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
   const Body = z.object({ tableId: z.string().nullable().optional() }).optional();
   const parsed = Body.safeParse(req.body);
@@ -135,8 +143,8 @@ ordersRouter.post("/core/orders", asyncHandler(async (req, res) => {
 
 // Add or update line in order
 ordersRouter.post("/core/orders/:id/lines", asyncHandler(async (req, res) => {
-  const tenantId = req.header("x-tenant-id");
-  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   if (!prisma) {
     console.error("[API MISCONFIG] Prisma missing", { route: req.originalUrl, tenantId });
     return res.status(500).json({ error: { message: "SERVER_MISCONFIG" } });
@@ -225,8 +233,8 @@ ordersRouter.post("/core/orders/:id/lines", asyncHandler(async (req, res) => {
 // - No DB migration yet; merge decision uses in-memory signature derived from line.modifiers
 // List orders (tenant-scoped)
 ordersRouter.get("/core/orders", asyncHandler(async (req, res) => {
-  const tenantId = req.header("x-tenant-id");
-  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
   const status = (req.query.status as string | undefined) ?? undefined;
   const where: any = { tenantId };
@@ -243,8 +251,8 @@ ordersRouter.get("/core/orders", asyncHandler(async (req, res) => {
 
 // Last completed order (tenant-scoped)
 ordersRouter.get("/core/orders/last-completed", asyncHandler(async (req, res) => {
-  const tenantId = req.header("x-tenant-id");
-  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
   const last = await prisma.order.findFirst({
     where: { tenantId, status: "COMPLETED" as any },
@@ -257,8 +265,8 @@ ordersRouter.get("/core/orders/last-completed", asyncHandler(async (req, res) =>
 
 // Order detail (tenant-scoped)
 ordersRouter.get("/core/orders/:id", asyncHandler(async (req, res) => {
-  const tenantId = req.header("x-tenant-id");
-  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
   const id = String(req.params.id);
   const order = await prisma.order.findFirst({ where: { id, tenantId }, include: { lines: true } });
@@ -304,8 +312,8 @@ ordersRouter.get("/core/kds/stream", asyncHandler(async (req, res) => {
 
 // KDS: helper tickets list for a single status
 ordersRouter.get("/core/kds/tickets", asyncHandler(async (req, res) => {
-  const tenantId = req.header("x-tenant-id");
-  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
   const status = String(req.query.status || "");
   const valid = ["SENT", "IN_PREP", "READY"]; // Only relevant for KDS columns

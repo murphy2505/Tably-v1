@@ -9,6 +9,7 @@ import { ordersRouter } from "./modules/orders/routes";
 import { menuCardsRouter } from "./modules/menuCards/routes";
 import { webshopRouter } from "./modules/webshop/routes";
 import { modifiersRouter } from "./modules/modifiers/routes";
+import { settingsRouter } from "./modules/settings/routes";
 import { errorMiddleware, serviceUnavailable } from "./lib/http";
 import printRouter from "./routes/print";
 import { prisma } from "./lib/prisma";
@@ -64,9 +65,13 @@ export function createServer() {
     }
   });
 
-  app.use((req, _res, next) => {
-    // Validate tenant existence early using optional override header
-    getTenantIdFromRequest(req);
+  app.use((req, res, next) => {
+    // Resolve tenant from header; in production, require it explicitly
+    const tenantId = getTenantIdFromRequest(req);
+    const isProd = process.env.NODE_ENV === "production";
+    if (!tenantId && isProd) {
+      return res.status(400).json({ error: { message: "TENANT_ID_REQUIRED" } });
+    }
     next();
   });
 
@@ -81,6 +86,7 @@ export function createServer() {
   app.use("/", modifiersRouter);
   app.use("/", menuCardsRouter);
   app.use("/", webshopRouter);
+  app.use("/", settingsRouter);
   app.use("/", ordersRouter);
   app.use("/print", printRouter);
 

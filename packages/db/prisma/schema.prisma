@@ -50,6 +50,8 @@ model Tenant {
   menuCardItems              MenuCardItem[]
   menuCardItemModifierGroups MenuCardItemModifierGroup[]
   settings                   TenantSettings?
+
+  receiptSequences ReceiptSequence[]
 }
 
 model RevenueGroup {
@@ -379,10 +381,15 @@ model Order {
   cancelledAt DateTime?
 
   // Payments (MVP)
-  paidAt             DateTime?
-  paymentMethod      String?
-  paymentRef         String?
-  cashReceivedCents  Int?
+  paidAt            DateTime?
+  paymentMethod     String?
+  paymentRef        String?
+  cashReceivedCents Int?
+
+  // Receipt numbering (Scanfie-style)
+  receiptNo       Int?
+  receiptLabel    String?
+  receiptIssuedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -398,6 +405,21 @@ model Order {
   @@index([tenantId, status])
 }
 
+model ReceiptSequence {
+  id        String   @id @default(cuid())
+  tenantId  String
+  // YYYYMMDD code for daily sequence reset
+  dateCode  String
+  // Next sequence to issue for this day (starts at 2 so issuedNo = nextSeq - 1)
+  nextSeq   Int      @default(2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, dateCode])
+}
+
 model OrderLine {
   id         String @id @default(cuid())
   tenantId   String
@@ -407,7 +429,7 @@ model OrderLine {
   priceCents Int
   modifiers  Json?
   // Snapshot VAT rate in basis points (e.g., 900, 2100) for this line
-  vatRateBps Int @default(2100)
+  vatRateBps Int    @default(2100)
   vatSource  String @default("PRODUCT")
 
   createdAt DateTime @default(now())
@@ -427,6 +449,8 @@ model TenantSettings {
   openingHours    Json
   closures        Json
   messageClosed   String?
+  // Receipt number prefix (e.g., "C"), optional
+  receiptPrefix   String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now()) @updatedAt
 

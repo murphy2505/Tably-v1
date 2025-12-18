@@ -21,6 +21,7 @@
     "db:down": "docker compose -f infra/docker-compose.yml down --remove-orphans",
     "db:reset": "docker rm -f tably-postgres || true && docker compose -f infra/docker-compose.yml down -v --remove-orphans && docker compose -f infra/docker-compose.yml up -d",
     "prisma:generate": "npm --workspace packages/db run prisma:generate",
+    "prisma:migrate": "npm --workspace packages/db run prisma:migrate",
     "db:migrate": "npm --workspace packages/db run prisma:migrate",
     "db:seed": "npm --workspace packages/db run prisma:seed"
   },

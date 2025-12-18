@@ -27,6 +27,27 @@ npm run dev
 npm run dev:web
 ```
 
+### Dev Servers
+- API runs on `:4002`; Web runs on `:5173`.
+- Run only one instance of each. Avoid duplicate `npm run dev` processes.
+- If ports are busy or you see exit code 130, stop all Node processes and restart:
+
+```bash
+# macOS examples
+pkill -f "node.*4002" || true
+pkill -f "vite" || true
+
+# Re-generate Prisma client from shared schema
+npm run prisma:generate
+
+# Apply migrations
+npm run prisma:migrate
+
+# Start API only and verify
+npm run dev
+curl -s http://localhost:4002/ready | jq
+```
+
 Copy `.env.example` to `.env` and adjust if needed. Step 1 is single-tenant via `DEFAULT_TENANT_ID`.
 
 ## Checks (PORT=4002)

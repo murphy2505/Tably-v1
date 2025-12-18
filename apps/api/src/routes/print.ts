@@ -113,7 +113,7 @@ router.post("/order/:orderId", async (req, res) => {
     await printEpsonCounterReceipt(ip, {
       businessName: "Cafetaria ’t Centrum",
       addressLine: "Groesbeek",
-      orderNo: (order as any).receiptNo ?? (order as any).number ?? String(order.id).slice(-6),
+      orderNo: (order as any).receiptLabel ?? (order as any).receiptNo ?? (order as any).number ?? String(order.id).slice(-6),
       createdAtIso: (order as any).createdAt?.toISOString?.() ?? new Date().toISOString(),
       lines: receiptLines,
       subtotalCents,

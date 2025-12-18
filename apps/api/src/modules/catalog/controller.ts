@@ -37,6 +37,7 @@ function validationError(
 export async function listRevenueGroups(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const isActive = parseIsActive(req);
     const { field, order } = parseOrder(req, ["sortOrder", "name"], "sortOrder");
 
@@ -58,6 +59,7 @@ export async function listRevenueGroups(req: Request, res: Response) {
 export async function createRevenueGroup(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
     if (!req.body?.name || typeof req.body.name !== "string") {
       return validationError(res, [{ path: ["name"], message: "Required" }]);
@@ -82,6 +84,7 @@ export async function createRevenueGroup(req: Request, res: Response) {
 export async function updateRevenueGroup(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const id = req.params.id;
 
     const existing = await prisma.revenueGroup.findFirst({ where: { id, tenantId } });
@@ -106,6 +109,7 @@ export async function updateRevenueGroup(req: Request, res: Response) {
 export async function deleteRevenueGroup(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const id = req.params.id;
 
     const existing = await prisma.revenueGroup.findFirst({ where: { id, tenantId } });
@@ -125,6 +129,7 @@ export async function deleteRevenueGroup(req: Request, res: Response) {
 export async function listVatRates(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const data = await prisma.vatRate.findMany({
       where: { tenantId, isActive: true },
       orderBy: { sortOrder: "asc" },
@@ -143,6 +148,7 @@ export async function listVatRates(req: Request, res: Response) {
 export async function listProductGroups(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const isActive = parseIsActive(req);
     const { field, order } = parseOrder(req, ["sortOrder", "name"], "sortOrder");
 
@@ -174,6 +180,7 @@ export async function listProductGroups(req: Request, res: Response) {
 export async function createProductGroup(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
     if (!req.body?.name || typeof req.body.name !== "string") {
       return validationError(res, [{ path: ["name"], message: "Required" }]);
@@ -201,6 +208,7 @@ export async function createProductGroup(req: Request, res: Response) {
 export async function updateProductGroup(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const id = req.params.id;
 
     const existing = await prisma.productGroup.findFirst({ where: { id, tenantId } });
@@ -228,6 +236,7 @@ export async function updateProductGroup(req: Request, res: Response) {
 export async function deleteProductGroup(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const id = req.params.id;
 
     const existing = await prisma.productGroup.findFirst({ where: { id, tenantId } });
@@ -254,6 +263,7 @@ export async function deleteProductGroup(req: Request, res: Response) {
 export async function listCategories(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const isActive = parseIsActive(req);
     const { field, order } = parseOrder(req, ["sortOrder", "name"], "sortOrder");
 
@@ -284,6 +294,7 @@ export async function listCategories(req: Request, res: Response) {
 export async function createCategory(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
     if (!req.body?.name || typeof req.body.name !== "string") {
       return validationError(res, [{ path: ["name"], message: "Required" }]);
@@ -309,6 +320,7 @@ export async function createCategory(req: Request, res: Response) {
 export async function updateCategory(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const id = req.params.id;
 
     const existing = await prisma.category.findFirst({ where: { id, tenantId } });
@@ -334,6 +346,7 @@ export async function updateCategory(req: Request, res: Response) {
 export async function deleteCategory(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const id = req.params.id;
 
     const existing = await prisma.category.findFirst({ where: { id, tenantId } });
@@ -356,6 +369,7 @@ export async function deleteCategory(req: Request, res: Response) {
 export async function listProducts(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
     const isActive = parseIsActive(req);
     const { field, order } = parseOrder(req, ["name", "createdAt"], "createdAt");
@@ -392,6 +406,7 @@ export async function listProducts(req: Request, res: Response) {
 export async function getProduct(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const id = req.params.id;
 
     const item = await prisma.product.findFirst({
@@ -415,6 +430,7 @@ export async function getProduct(req: Request, res: Response) {
 export async function createProduct(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
     const details: Array<{ path: (string | number)[]; message: string }> = [];
     if (!req.body?.name) details.push({ path: ["name"], message: "Required" });
@@ -462,6 +478,7 @@ export async function createProduct(req: Request, res: Response) {
 export async function updateProduct(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const id = req.params.id;
 
     const existing = await prisma.product.findFirst({ where: { id, tenantId } });
@@ -505,6 +522,7 @@ export async function updateProduct(req: Request, res: Response) {
 export async function deleteProduct(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const id = req.params.id;
 
     const existing = await prisma.product.findFirst({ where: { id, tenantId } });
@@ -524,6 +542,7 @@ export async function deleteProduct(req: Request, res: Response) {
 export async function listVariants(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const productId = req.query.productId as string | undefined;
     const isActive = parseIsActive(req);
     const { field, order } = parseOrder(req, ["sortOrder", "name"], "sortOrder");
@@ -547,6 +566,7 @@ export async function listVariants(req: Request, res: Response) {
 export async function createVariant(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
     const details: Array<{ path: (string | number)[]; message: string }> = [];
     if (!req.body?.productId) details.push({ path: ["productId"], message: "Required" });
@@ -574,6 +594,7 @@ export async function createVariant(req: Request, res: Response) {
 export async function updateVariant(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const id = req.params.id;
 
     const existing = await prisma.productVariant.findFirst({ where: { id, tenantId } });
@@ -599,6 +620,7 @@ export async function updateVariant(req: Request, res: Response) {
 export async function deleteVariant(req: Request, res: Response) {
   try {
     const tenantId = getTenantIdFromRequest(req);
+    if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
     const id = req.params.id;
 
     const existing = await prisma.productVariant.findFirst({ where: { id, tenantId } });

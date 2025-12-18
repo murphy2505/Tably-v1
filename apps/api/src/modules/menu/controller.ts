@@ -6,6 +6,7 @@ import { mapActivePosMenu } from "./posDto";
 
 export async function listMenus(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const isActiveQ = req.query.isActive as string | undefined;
   const orderByQ = req.query.orderBy as string | undefined;
   const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
@@ -19,6 +20,7 @@ export async function listMenus(req: Request, res: Response) {
 }
 export async function createMenu(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const m = await prisma.menu.create({
     data: {
       tenantId,
@@ -35,6 +37,7 @@ export async function createMenu(req: Request, res: Response) {
 }
 export async function updateMenu(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const id = req.params.id;
   const existing = await prisma.menu.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -54,6 +57,7 @@ export async function updateMenu(req: Request, res: Response) {
 }
 export async function deleteMenu(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const id = req.params.id;
   const existing = await prisma.menu.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -63,6 +67,7 @@ export async function deleteMenu(req: Request, res: Response) {
 
 export async function listCourses(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const isActiveQ = req.query.isActive as string | undefined;
   const orderByQ = req.query.orderBy as string | undefined;
   const orderQ = (req.query.order as string | undefined) === "desc" ? "desc" : "asc";
@@ -76,11 +81,13 @@ export async function listCourses(req: Request, res: Response) {
 }
 export async function createCourse(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const c = await prisma.course.create({ data: { tenantId, name: req.body.name, shortLabel: req.body.shortLabel ?? null, sortOrder: req.body.sortOrder ?? 0, isActive: req.body.isActive ?? true } });
   res.json({ data: c });
 }
 export async function updateCourse(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const id = req.params.id;
   const existing = await prisma.course.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -89,6 +96,7 @@ export async function updateCourse(req: Request, res: Response) {
 }
 export async function deleteCourse(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const id = req.params.id;
   const existing = await prisma.course.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -98,6 +106,7 @@ export async function deleteCourse(req: Request, res: Response) {
 
 export async function listMenuItems(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const menuId = req.query.menuId as string | undefined;
   const isActiveQ = req.query.isActive as string | undefined;
   const orderByQ = req.query.orderBy as string | undefined;
@@ -113,6 +122,7 @@ export async function listMenuItems(req: Request, res: Response) {
 }
 export async function createMenuItem(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const mi = await prisma.menuItem.create({
     data: {
       tenantId,
@@ -129,6 +139,7 @@ export async function createMenuItem(req: Request, res: Response) {
 }
 export async function updateMenuItem(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const id = req.params.id;
   const existing = await prisma.menuItem.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -148,6 +159,7 @@ export async function updateMenuItem(req: Request, res: Response) {
 }
 export async function deleteMenuItem(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const id = req.params.id;
   const existing = await prisma.menuItem.findFirst({ where: { id, tenantId } });
   if (!existing) return notFound(res);
@@ -157,6 +169,7 @@ export async function deleteMenuItem(req: Request, res: Response) {
 
 export async function getActivePosMenu(req: Request, res: Response) {
   const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
   const menu = await prisma.menu.findFirst({ where: { tenantId, isActive: true }, orderBy: { sortOrder: "asc" } });
   if (!menu) return res.json({ data: null });
   const items = await prisma.menuItem.findMany({
