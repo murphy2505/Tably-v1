@@ -33,6 +33,14 @@ export function createServer() {
 
   console.log(`[api] PORT=${port}`);
   console.log(`[api] DATABASE_URL=${maskDbUrl(dbUrl)}`);
+  // Sanity check: ensure Prisma delegates exist after generate
+  try {
+    const hasOrderSeq = typeof (prisma as any).orderSequence?.findMany === "function";
+    const hasReceiptSeq = typeof (prisma as any).receiptSequence?.findMany === "function";
+    console.log(`[api] prisma delegates: orderSequence=${hasOrderSeq} receiptSequence=${hasReceiptSeq}`);
+  } catch (e) {
+    console.log(`[api] prisma delegates check failed:`, e);
+  }
 
   const allowedOrigins = [
     "http://localhost:5173",

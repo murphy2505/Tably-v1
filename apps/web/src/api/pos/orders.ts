@@ -29,6 +29,8 @@ export type OrderDTO = {
   paymentMethod?: "PIN" | "CASH" | null;
   paymentRef?: string | null;
   cashReceivedCents?: number | null;
+  receiptLabel?: string | null;
+  draftLabel?: string | null;
   lines: OrderLineDTO[];
   subtotalExclVatCents: number;
   totalInclVatCents: number;

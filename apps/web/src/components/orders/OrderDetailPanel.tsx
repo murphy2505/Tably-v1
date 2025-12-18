@@ -81,7 +81,12 @@ export default function OrderDetailPanel({ orderId, onClose, onChanged }: Props)
   return (
     <div style={{ borderLeft: "1px solid #e5e7eb", padding: 12, display: "grid", gap: 10, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-        <div style={{ fontWeight: 900 }}>Bon #{orderId.slice(-6)}</div>
+        <div>
+          {order?.receiptLabel ? (
+            <div className="bon-receipt-label">Bon {order.receiptLabel}</div>
+          ) : null}
+          <div style={{ fontWeight: 900 }}>Bon #{orderId.slice(-6)}</div>
+        </div>
         {onClose && (
           <button className="btn" onClick={onClose} style={{ height: 32 }}>Sluiten</button>
         )}

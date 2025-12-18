@@ -267,7 +267,14 @@ export function App() {
           <aside className="pos-right">
             <div className="bon-header">
               <div className="bon-header-top">
-                <div className="bon-title">Bon</div>
+                {(() => {
+                  const label = activeOrder?.receiptLabel || activeOrder?.draftLabel;
+                  return label ? (
+                    <div className="bon-title-number">Bon {label}</div>
+                  ) : (
+                    <div className="bon-title">Bon</div>
+                  );
+                })()}
                 <div className="bon-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span className={`status-chip ${statusClass}`}>{statusLabel}</span>
                 </div>

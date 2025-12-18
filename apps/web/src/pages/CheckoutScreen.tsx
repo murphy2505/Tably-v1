@@ -36,6 +36,8 @@ export default function CheckoutScreen() {
     subtotalExclVatCents: number;
     totalInclVatCents: number;
     vatBreakdown?: Record<string, { rateBps: number; grossCents: number; netCents: number; vatCents: number }>;
+    receiptLabel?: string | null;
+    draftLabel?: string | null;
   }>(null);
   useEffect(() => {
     let alive = true;
@@ -50,6 +52,8 @@ export default function CheckoutScreen() {
           subtotalExclVatCents: o.subtotalExclVatCents ?? 0,
           totalInclVatCents: o.totalInclVatCents ?? 0,
           vatBreakdown: o.vatBreakdown as any,
+          receiptLabel: (o as any).receiptLabel ?? null,
+          draftLabel: (o as any).draftLabel ?? null,
         });
       } catch (_e) {
         // Keep fallback from local store
@@ -133,6 +137,21 @@ export default function CheckoutScreen() {
         // For gift flow demo, treat as cash-equivalent without amount
         await apiPayOrder(orderId, { method: "PIN", paymentRef: "GIFT-STUB" });
       }
+      // Refetch to pick up receiptLabel immediately after payment
+      try {
+        const o = await apiGetOrder(orderId);
+        setServerOrder({
+          id: o.id,
+          lines: o.lines.map((l) => ({ title: l.title, qty: l.qty, priceCents: l.priceCents })),
+          subtotalExclVatCents: o.subtotalExclVatCents ?? 0,
+          totalInclVatCents: o.totalInclVatCents ?? 0,
+          vatBreakdown: o.vatBreakdown as any,
+          receiptLabel: (o as any).receiptLabel ?? null,
+          draftLabel: (o as any).draftLabel ?? null,
+        });
+      } catch {
+        // ignore; UI will still proceed
+      }
     } catch (e) {
       // Safety: still allow completion UI, do not brick app
       console.warn("transition to COMPLETED failed", e);
@@ -189,7 +208,14 @@ export default function CheckoutScreen() {
         <section className="checkout-left">
           <div className="receipt-panel">
             <div className="receipt-header">
-              <div className="receipt-title">Bon</div>
+              {(() => {
+                const label = serverOrder?.receiptLabel || serverOrder?.draftLabel;
+                return label ? (
+                  <div className="bon-title-number">Bon {label}</div>
+                ) : (
+                  <div className="receipt-title">Bon</div>
+                );
+              })()}
               <div className="receipt-total">
                 <div className="receipt-total-label">Totaal</div>
                 <div className="receipt-total-value">{formatEuro(totalCents)}</div>

@@ -70,6 +70,12 @@ export const NAV: NavItem[] = [
     ],
   },
   {
+    path: "/orders",
+    label: "Bestellingen",
+    icon: ClipboardList,
+    roles: ["cashier", "manager", "admin"],
+  },
+  {
     path: "/loyalty",
     label: "Loyalty",
     icon: Gift,

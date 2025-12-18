@@ -1,8 +1,9 @@
 import { Router, Response } from "express";
-import { asyncHandler, notFound } from "../../lib/http";
+import { asyncHandler, validationError, notFound } from "../../lib/http";
 import { prisma } from "../../lib/prisma";
 import { z } from "zod";
 import { getTenantIdFromRequest } from "../../tenant";
+import { issueDraftNumberTx } from "./draft";
 import { resolveModifiersForProduct, resolveModifiersForMenuItem } from "../modifiers/controller";
 import { issueReceiptNumberTx } from "./receipt";
 import { calculateAndPersistOrderTotals } from "./totals";
@@ -133,9 +134,11 @@ ordersRouter.post("/core/orders", asyncHandler(async (req, res) => {
   const parsed = Body.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
 
-  const order = await prisma.order.create({
-    data: { tenantId, status: "OPEN" as any },
-    include: { lines: true },
+  const now = new Date();
+  const order = await prisma.$transaction(async (tx) => {
+    const created = await tx.order.create({ data: { tenantId, status: "OPEN" as any }, include: { lines: true } });
+    const withDraft = await issueDraftNumberTx(tx as any, tenantId, created.id, now);
+    return withDraft;
   });
   const updated = await calculateAndPersistOrderTotals(tenantId, order.id);
   return res.status(201).json({ order: updated ?? order });
