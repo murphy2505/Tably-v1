@@ -1,10 +1,7 @@
 import http from "../services/http";
 import type { OrderDTO } from "./pos/orders";
 
-function tenantHeaders() {
-  const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || "cafetaria-centrum";
-  return { headers: { "x-tenant-id": tenantId } };
-}
+// tenantHeaders() removed — tenant is injected by http.ts interceptor
 
 export type OrderListItem = {
   id: string;
@@ -21,6 +18,6 @@ export type OrderListItem = {
 };
 
 export async function fetchOrdersList(): Promise<OrderDTO[]> {
-  const res = await http.get<{ orders: OrderDTO[] }>(`/core/orders`, tenantHeaders());
+  const res = await http.get<{ orders: OrderDTO[] }>(`/core/orders`);
   return res.data.orders || [];
 }

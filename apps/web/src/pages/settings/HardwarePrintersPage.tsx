@@ -12,7 +12,7 @@ export default function HardwarePrintersPage() {
   const [editing, setEditing] = useState<HwPrinter | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
 
-  const [form, setForm] = useState<Partial<HwPrinter>>({ vendor: "GENERIC_ESCPOS", paperWidthMm: 80, isActive: true, port: 9100 } as any);
+  const [form, setForm] = useState<Partial<HwPrinter>>({ vendor: "GENERIC_ESCPOS", paperWidthMm: 80, isActive: true, port: 9100, escposAsciiMode: true } as any);
 
   useEffect(() => { let alive = true; (async () => {
     try {
@@ -28,18 +28,20 @@ export default function HardwarePrintersPage() {
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2500); return () => clearTimeout(t); }, [toast]);
 
-  function openNew() { setEditing(null); setForm({ name: "", vendor: "GENERIC_ESCPOS", host: "", port: 9100, paperWidthMm: 80, isActive: true } as any); setModalOpen(true); }
-  function openEdit(p: HwPrinter) { setEditing(p); setForm(p); setModalOpen(true); }
+  function openNew() { setEditing(null); setForm({ name: "", vendor: "GENERIC_ESCPOS", host: "", port: 9100, paperWidthMm: 80, isActive: true, escposAsciiMode: true } as any); setModalOpen(true); }
+  function openEdit(p: HwPrinter) { setEditing(p); setForm({ ...p, escposAsciiMode: p.escposAsciiMode ?? (p.vendor === "EPSON" || p.vendor === "GENERIC_ESCPOS" ? true : undefined) }); setModalOpen(true); }
 
   async function save() {
     try {
       if (!form.name || !form.vendor || !form.host) return;
+      const payload: any = { ...form };
+      if (payload.vendor === "STAR") { delete payload.escposAsciiMode; }
       if (editing) {
-        const updated = await hwUpdatePrinter(editing.id, form);
+        const updated = await hwUpdatePrinter(editing.id, payload);
         setItems((prev) => prev.map((x) => x.id === updated.id ? updated : x));
         setToast("Printer bijgewerkt");
       } else {
-        const created = await hwCreatePrinter(form as any);
+        const created = await hwCreatePrinter(payload as any);
         setItems((prev) => [created, ...prev]);
         setToast("Printer toegevoegd");
       }
@@ -84,7 +86,7 @@ export default function HardwarePrintersPage() {
           <table className="settings-table">
             <thead>
               <tr>
-                <th>Naam</th><th>Host/IP</th><th>Poort</th><th>Vendor</th><th>Papier</th><th>Status</th><th>Acties</th>
+                <th>Naam</th><th>Host/IP</th><th>Poort</th><th>Vendor</th><th>Papier</th><th>ASCII</th><th>Status</th><th>Acties</th>
               </tr>
             </thead>
             <tbody>
@@ -95,6 +97,7 @@ export default function HardwarePrintersPage() {
                   <td>{p.port}</td>
                   <td>{p.vendor}</td>
                   <td>{p.paperWidthMm}</td>
+                  <td>{(p.vendor === "EPSON" || p.vendor === "GENERIC_ESCPOS") ? (p.escposAsciiMode ? "Aan" : "Uit") : "—"}</td>
                   <td>{p.isActive ? "Actief" : "Uit"}</td>
                   <td>
                     <button className="btn" onClick={() => openEdit(p)}>Bewerken</button>
@@ -132,6 +135,19 @@ export default function HardwarePrintersPage() {
                   <option value="GENERIC_ESCPOS">GENERIC_ESCPOS</option>
                 </select>
               </label>
+              {((form.vendor as Vendor) === "EPSON" || (form.vendor as Vendor) === "GENERIC_ESCPOS") && (
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={field(form.escposAsciiMode as boolean | undefined, true)}
+                    onChange={(e) => setForm((f) => ({ ...f, escposAsciiMode: e.target.checked }))}
+                  />
+                  <span>
+                    Epson safe mode (ASCII)
+                    <div className="field-help">Vervangt € door EUR en verwijdert speciale tekens om rare tekens op de bon te voorkomen.</div>
+                  </span>
+                </label>
+              )}
               <label>
                 <span>Papier</span>
                 <select value={field(form.paperWidthMm as 58|80, 80)} onChange={(e) => setForm((f) => ({ ...f, paperWidthMm: Number(e.target.value) as any }))}>

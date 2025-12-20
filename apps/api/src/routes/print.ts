@@ -2,10 +2,9 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { getTenantIdFromRequest } from "../tenant";
 
-import { printTestReceipt } from "../services/printer/starPrinter";
+import { printTest, printToPrinter } from "../services/printing";
 import { printEpsonTestReceipt } from "../services/printer/epsonPrinter";
 import { printEpsonCounterReceipt, printEpsonQrReceipt } from "../services/printer/epsonReceipts";
-import { escposTcpTestPrint } from "../services/printer/escposTcp";
 import net from "net";
 
 type PrintKind = "RECEIPT" | "QR_CARD" | "KITCHEN" | "BAR";
@@ -20,69 +19,21 @@ async function resolvePrinterForKind(tenantId: string, kind: PrintKind) {
   return { id: p.id, name: p.name, driver: p.driver as any, host: p.host, port: p.port };
 }
 
-function buildEscposReceipt(order: any, driver: "ESC_POS_TCP" | "STAR_ESC_POS_TCP") {
-  const ESC = 0x1b; const GS = 0x1d;
-  const lines: number[] = [];
-  const push = (...nums: number[]) => { lines.push(...nums); };
-  const text = (s: string) => { lines.push(...Buffer.from(s, "utf8")); };
+// ESC/POS receipt builder moved to services/printing/index.ts
 
-  push(ESC, 0x40); // init
-  push(ESC, 0x61, 0x01); // center
-  push(GS, 0x21, 0x11); text("Tably — Bon\n"); push(GS, 0x21, 0x00);
-  push(ESC, 0x61, 0x00); // left
-
-  const label = order.receiptLabel || order.draftLabel || String(order.id).slice(-6);
-  text(`Bon: ${label}\n`);
-  if (order.createdAt) {
-    try { text(`Tijd: ${new Date(order.createdAt).toLocaleString("nl-NL")}\n`); } catch {}
-  }
-  text("\n");
-
-  const items = (order.lines || []).map((l: any) => ({ title: l.title ?? "Item", qty: Number(l.qty ?? 1), unit: Number(l.priceCents ?? 0) }));
-  for (const l of items) {
-    const total = l.qty * l.unit;
-    text(`${l.qty}x ${l.title}\n`);
-    // simple right total by adding spaces, width ~32
-    const amt = (total / 100).toFixed(2).replace(".", ",");
-    text(`  € ${amt}\n`);
-  }
-  text("\n");
-  const subtotal = typeof order.subtotalExclVatCents === "number" ? order.subtotalExclVatCents : items.reduce((s, l) => s + l.qty * l.unit, 0);
-  const vat = typeof order.vatCents === "number" ? order.vatCents : 0;
-  const total = typeof order.totalInclVatCents === "number" ? order.totalInclVatCents : subtotal + vat;
-  text(`Subtotaal: € ${(subtotal/100).toFixed(2).replace(".", ",")}\n`);
-  text(`BTW: € ${(vat/100).toFixed(2).replace(".", ",")}\n`);
-  push(GS, 0x21, 0x01); text(`TOTAAL: € ${(total/100).toFixed(2).replace(".", ",")}\n`); push(GS, 0x21, 0x00);
-  text("\nBedankt!\n\n");
-
-  if (driver === "STAR_ESC_POS_TCP") { push(ESC, 0x64, 0x03); push(ESC, 0x69); }
-  else { push(ESC, 0x64, 0x05); push(GS, 0x56, 0x00); }
-
-  return Buffer.from(lines);
-}
-
-async function escposPrint(host: string, port: number, payload: Buffer, driver: "ESC_POS_TCP" | "STAR_ESC_POS_TCP") {
-  return new Promise<void>((resolve, reject) => {
-    const socket = new net.Socket();
-    let writeOk = false; let settled = false;
-    const finish = (err?: any) => { if (settled) return; settled = true; try { socket.end(); } catch {} err ? reject(err) : resolve(); };
-    socket.setTimeout(5000);
-    socket.once("timeout", () => finish(writeOk ? undefined : new Error("PRINT_TIMEOUT")));
-    socket.once("error", (err: any) => { const code = err?.code; if (writeOk && (code === "ECONNRESET" || code === "EPIPE")) return finish(); return finish(err); });
-    socket.once("close", () => finish());
-    socket.connect(port, host, () => { socket.write(payload, (err) => { if (err) return finish(err); writeOk = true; setTimeout(() => { try { socket.end(); } catch {} }, 100); }); });
-  });
-}
+// Raw TCP ESC/POS moved under printing driver
 
 const router = Router();
 
-// POST /print/test → Star (AUX printer)
-router.post("/test", async (_req, res) => {
+// POST /print/test → route to driver based on a default active printer (RECEIPT)
+router.post("/test", async (req, res) => {
   try {
-    await printTestReceipt();
+    const tenantId = getTenantIdFromRequest(req);
+    const printer = await resolvePrinterForKind(tenantId, "RECEIPT");
+    await printTest(printer as any);
     res.json({ ok: true });
   } catch (e: any) {
-    console.error("[print.star.test] error", e);
+    console.error("[print.test] error", e);
     res.status(500).json({ error: { message: "PRINT_FAILED", details: e?.message || String(e) } });
   }
 });
@@ -98,7 +49,8 @@ router.post("/test-escpos", async (req, res) => {
     if (!Number.isFinite(p) || p <= 0) {
       return res.status(400).json({ ok: false, error: "PORT_INVALID" });
     }
-    await escposTcpTestPrint(host, p);
+    // Use driver directly for explicit ESC/POS test
+    await printTest({ id: "ad-hoc", name: "ESC/POS", driver: "ESC_POS_TCP", host, port: p } as any);
     res.json({ ok: true });
   } catch (e: any) {
     const msg = e?.message || String(e);
@@ -118,9 +70,7 @@ router.post("/receipt", async (req, res) => {
     const printer = await resolvePrinterForKind(tenantId, "RECEIPT");
     console.log(`[print.receipt] tenant=${tenantId} order=${orderId} printer=${printer.name} ${printer.host}:${printer.port} driver=${printer.driver}`);
     // ESC/POS raw for STAR/ESC; use Epson receipt when needed later
-    const driver = (printer.driver as any) === "STAR_ESC_POS_TCP" ? "STAR_ESC_POS_TCP" : "ESC_POS_TCP";
-    const payload = buildEscposReceipt(order as any, driver);
-    await escposPrint(printer.host, printer.port, payload, driver);
+    await printToPrinter(printer as any, { kind: "RECEIPT", payload: { order } });
     res.json({ ok: true });
   } catch (e: any) {
     console.error("[print.receipt] error", e);
@@ -136,9 +86,7 @@ router.post("/receipt/last", async (req, res) => {
     if (!ord) return res.status(404).json({ error: { message: "NO_PAID_ORDER" } });
     const printer = await resolvePrinterForKind(tenantId, "RECEIPT");
     console.log(`[print.receipt.last] tenant=${tenantId} order=${ord.id} printer=${printer.name} ${printer.host}:${printer.port} driver=${printer.driver}`);
-    const driver = (printer.driver as any) === "STAR_ESC_POS_TCP" ? "STAR_ESC_POS_TCP" : "ESC_POS_TCP";
-    const payload = buildEscposReceipt(ord as any, driver);
-    await escposPrint(printer.host, printer.port, payload, driver);
+    await printToPrinter(printer as any, { kind: "RECEIPT", payload: { order: ord } });
     res.json({ ok: true, orderId: ord.id });
   } catch (e: any) {
     console.error("[print.receipt.last] error", e);
@@ -153,9 +101,8 @@ router.post("/test-kind", async (req, res) => {
     const { kind } = (req.body || {}) as { kind?: PrintKind };
     if (!kind) return res.status(400).json({ error: { message: "KIND_REQUIRED" } });
     const printer = await resolvePrinterForKind(tenantId, kind);
-    const drv = (printer.driver as any) === "STAR_ESC_POS_TCP" ? "STAR_ESC_POS_TCP" : "ESC_POS_TCP";
     console.log(`[print.test-kind] tenant=${tenantId} kind=${kind} printer=${printer.name} ${printer.host}:${printer.port} driver=${printer.driver}`);
-    await escposTcpTestPrint(printer.host, printer.port, drv as any);
+    await printTest(printer as any);
     res.json({ ok: true });
   } catch (e: any) {
     console.error("[print.test-kind] error", e);

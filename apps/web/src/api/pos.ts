@@ -1,16 +1,13 @@
 import type { ActivePosMenuResponse, PosMenuDTO, PosMenuItemDTO } from "../types/pos";
 import http from "../services/http";
 
-function tenantHeaders() {
-  const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || "cafetaria-centrum";
-  return { headers: { "x-tenant-id": tenantId } };
-}
+// tenantHeaders() removed — tenant is injected by http.ts interceptor
 
 export async function fetchActivePosMenu(_signal?: AbortSignal): Promise<ActivePosMenuResponse> {
   // Use new menu-cards active resolver and map to legacy PosMenuDTO shape
   const res = await http.get<{ menuCards: Array<{ id: string; name: string; sortOrder: number; items: any[] }> }>(
     "/core/menu-cards/active",
-    { ...tenantHeaders(), params: { channel: "POS" } }
+    { params: { channel: "POS" } }
   );
   const cards = res.data.menuCards || [];
   if (!cards.length) return { data: null };

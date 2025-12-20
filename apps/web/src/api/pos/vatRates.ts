@@ -6,14 +6,11 @@ export type VatRateDTO = {
   rate: number;
 };
 
-function tenantHeaders() {
-  const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || "cafetaria-centrum";
-  return { headers: { "x-tenant-id": tenantId } };
-}
+// tenantHeaders() removed — tenant is injected by http.ts interceptor
 
 const base = "/core/catalog/vat-rates";
 
 export async function apiListVatRates(): Promise<VatRateDTO[]> {
-  const res = await http.get<{ data: VatRateDTO[] }>(base, tenantHeaders());
+  const res = await http.get<{ data: VatRateDTO[] }>(base);
   return res.data.data;
 }

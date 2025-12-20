@@ -2,16 +2,21 @@ import net from "net";
 
 export type EscposDriver = "ESC_POS_TCP" | "STAR_ESC_POS_TCP";
 
+import { escposAsciiSafe } from "../printing";
+
 function buildEscposTest(ip: string, driver: EscposDriver = "ESC_POS_TCP"): Buffer {
   const lines: number[] = [];
   function push(...nums: number[]) { lines.push(...nums); }
-  function text(s: string) { lines.push(...Buffer.from(s, "utf8")); }
+  function text(s: string) {
+    const safe = escposAsciiSafe(s);
+    lines.push(...Buffer.from(safe, "ascii"));
+  }
 
   // Initialize
   push(0x1b, 0x40);
   // Bold on
   push(0x1b, 0x45, 0x01);
-  text("Tably – Test bon\n");
+  text("Tably - Test bon\n");
   // Bold off
   push(0x1b, 0x45, 0x00);
   text(`ESC/POS TCP printer test\n`);
@@ -61,22 +66,28 @@ export async function escposTcpTestPrint(host: string, port: number = 9100, driv
     };
 
     socket.setTimeout(timeoutMs);
+    console.log("[print.tcp.test] connect", { driver, host, port, timeoutMs });
     socket.once("timeout", () => {
       if (writeSucceeded) {
         // Treat post-write timeouts as success
+        console.log("[print.tcp.test] timeout after write — treating as success");
         return onClose();
       }
+      console.error("[print.tcp.test] timeout before write");
       return onError(new Error("PRINT_TIMEOUT"));
     });
     socket.once("error", onError);
     socket.once("close", onClose);
 
     socket.connect(port, host, () => {
+      console.log("[print.tcp.test] connected");
       try {
         const payload = buildEscposTest(host, driver);
+        console.log("[print.tcp.test] writing bytes", payload.length);
         socket.write(payload, (err) => {
           if (err) return onError(err);
           writeSucceeded = true;
+          console.log("[print.tcp.test] write ok, ending");
           // End the connection; 'close' will resolve
           socket.end();
         });

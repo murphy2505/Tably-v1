@@ -255,38 +255,6 @@ body {
 /* =========================
    POS Body Grid
 ========================= */
-/* =========================
-  Settings UI
-========================= */
-.settings-page { display: flex; flex-direction: column; gap: 12px; }
-.settings-tabs { display: flex; gap: 8px; border-bottom: 1px solid #e5e7eb; }
-.settings-tab { padding: 8px 12px; border-radius: 10px 10px 0 0; text-decoration: none; color: #374151; }
-.settings-tab.active { background: #ffffff; border: 1px solid #e5e7eb; border-bottom-color: transparent; color: #111827; }
-.settings-content { display: grid; gap: 12px; }
-
-.settings-grid { display: grid; gap: 12px; }
-.settings-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; }
-.settings-card-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
-.settings-card-title { font-weight: 800; }
-.settings-card-actions { display: flex; gap: 8px; }
-.settings-table { width: 100%; border-collapse: collapse; }
-.settings-table th, .settings-table td { padding: 8px 10px; border-top: 1px solid #f3f4f6; text-align: left; }
-.settings-table thead th { background: #f9fafb; font-weight: 700; }
-.settings-note { padding: 10px 12px; color: #6b7280; }
-.settings-error { padding: 10px 12px; color: #b91c1c; }
-.toast-fixed { position: fixed; right: 16px; bottom: 16px; background: #111827; color: #fff; padding: 8px 12px; border-radius: 10px; box-shadow: 0 6px 16px rgba(0,0,0,0.25); z-index: 1001; }
-
-.settings-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.settings-modal { display: grid; grid-template-columns: 1fr 340px; gap: 12px; background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 12px; width: 900px; max-width: 95vw; }
-.settings-form { display: grid; gap: 10px; }
-.settings-form-grid { grid-template-columns: 1fr 1fr; }
-.settings-form label { display: grid; gap: 6px; }
-.settings-form input, .settings-form select { padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 10px; }
-.settings-form-actions { display: flex; justify-content: end; gap: 8px; }
-.toggle-row { display: inline-flex; align-items: center; gap: 8px; }
-.preview-pane { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; background: #fafafa; }
-.preview-title { font-weight: 800; margin-bottom: 6px; }
-.preview-note { color: #6b7280; }
 .pos-body {
   display: grid;
   grid-template-columns: 220px 1fr 380px;

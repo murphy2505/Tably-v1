@@ -1,29 +1,32 @@
-import { useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useOrders } from "../stores/ordersStore";
 import { usePosSession } from "../stores/posSessionStore";
 import { apiCreateOrder, apiGetOrder, apiPayOrder } from "../api/pos/orders";
 import { apiPrintReceipt, apiPrintLastReceipt, apiPrintQr } from "../api/print";
+import { getPosSettings } from "../api/settings";
+import { sumupCreateCheckout, sumupPollCheckout } from "../api/payments";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
-type PayMethod = "PIN" | "CASH" | "GIFTCARD";
-type CheckoutView = "CHECKOUT_IDLE" | "CASH_HELP" | "GIFT_FLOW" | "CHECKOUT_COMPLETE";
+type PayMethod = "PIN" | "CASH" | "GIFTCARD" | "SUMUP";
+type CheckoutView = "CHECKOUT_IDLE" | "CASH_HELP" | "GIFT_FLOW" | "SUMUP_WAIT" | "CHECKOUT_COMPLETE";
 
 export type CheckoutStateV1 = { lines: { title: string; qty: number; priceCents: number; lineTotalCents: number }[]; totalCents: number };
 export type CheckoutState = { orderId: string } | CheckoutStateV1;
 
 export default function CheckoutScreen() {
   const navigate = useNavigate();
-  const { state } = useLocation();
-  const nav = (state || {}) as Partial<CheckoutState>;
   const { orders, getTotalCents } = useOrders();
-  const { setActiveOrderId, clearActiveOrder } = usePosSession();
+  const { activeOrderId, setActiveOrderId, clearActiveOrder } = usePosSession();
 
-  let orderId: string | undefined = undefined;
-  if (nav && (nav as any).orderId) orderId = (nav as any).orderId as string;
+  // Lock the orderId when user selects a payment method to avoid stale/replaced orders during SUMUP_WAIT
+  const lockedOrderIdRef = useRef<string | null>(null);
+
+  // Canonical current order id comes from the session store
+  const orderId: string | undefined = lockedOrderIdRef.current || activeOrderId || undefined;
 
   const order = orders.find((o) => o.id === orderId);
   const initialLines = order ? order.lines : [];
@@ -70,7 +73,7 @@ export default function CheckoutScreen() {
   const [method, setMethod] = useState<PayMethod | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // CASH: store string digits representing cents (implicit two decimals)
+  // CASH state
   const [receivedStr, setReceivedStr] = useState<string>("");
   const receivedCents = useMemo(() => {
     const v = parseInt(receivedStr || "0", 10);
@@ -78,33 +81,29 @@ export default function CheckoutScreen() {
   }, [receivedStr]);
   const changeCents = Math.max(0, receivedCents - totalCents);
 
-  // GIFTCARD placeholders
+  // GIFTCARD placeholder
   const [giftCode, setGiftCode] = useState<string>("");
 
   const vatLines = useMemo(() => {
     const map = serverOrder?.vatBreakdown || {};
-    return Object.values(map).sort((a, b) => a.rateBps - b.rateBps);
+    return Object.values(map).sort((a: any, b: any) => a.rateBps - b.rateBps);
   }, [serverOrder]);
 
   function selectMethod(next: PayMethod) {
     setMethod(next);
+    if (!lockedOrderIdRef.current && activeOrderId) lockedOrderIdRef.current = activeOrderId;
     if (next === "CASH") {
-      // Always show helper, prefilled to total for quick confirm
       setReceivedStr(String(totalCents));
       setView("CASH_HELP");
     } else if (next === "PIN") setView("CHECKOUT_IDLE");
+    else if (next === "SUMUP") setView("CHECKOUT_IDLE");
     else setView("GIFT_FLOW");
   }
 
-  // Keep cash helper prefill sane if total changes
-  // When in CASH_HELP and received is empty or smaller than total, prefill to total
-  // Avoid flicker by only adjusting in helper view
   useEffect(() => {
     if (method === "CASH" && view === "CASH_HELP") {
       const current = parseInt(receivedStr || "0", 10) || 0;
-      if (current === 0 || current < totalCents) {
-        setReceivedStr(String(totalCents));
-      }
+      if (current === 0 || current < totalCents) setReceivedStr(String(totalCents));
     }
   }, [method, view, totalCents]);
 
@@ -112,6 +111,27 @@ export default function CheckoutScreen() {
   const [printingOrder, setPrintingOrder] = useState(false);
   const [printingQr, setPrintingQr] = useState(false);
   const [autoPrinted, setAutoPrinted] = useState(false);
+  const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(true);
+
+  // SumUp state
+  const [sumupProviderCheckoutId, setSumupProviderCheckoutId] = useState<string | null>(null);
+  const sumupPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [sumupStatus, setSumupStatus] = useState<string | null>(null);
+  const [sumupLastPolledAt, setSumupLastPolledAt] = useState<number | null>(null);
+  const [sumupStartedAt, setSumupStartedAt] = useState<number | null>(null);
+
+  // POS Settings
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const s = await getPosSettings();
+        if (!alive) return;
+        setAutoPrintEnabled(s.autoPrintReceiptAfterPayment);
+      } catch (_e) {}
+    })();
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -119,28 +139,108 @@ export default function CheckoutScreen() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (sumupPollRef.current) {
+        clearInterval(sumupPollRef.current);
+        sumupPollRef.current = null;
+      }
+    };
+  }, []);
+
   async function onConfirm() {
-    if (!orderId || submitting) return;
-    // Determine if payment is satisfied
+    const lockedOrderId = lockedOrderIdRef.current || null;
+    if (!lockedOrderId || submitting) {
+      if (!lockedOrderId) setToast("Geen bon geselecteerd");
+      return;
+    }
     const ok =
       method === "PIN" ||
       (method === "CASH" && receivedCents >= totalCents) ||
-      method === "GIFTCARD";
+      method === "GIFTCARD" ||
+      method === "SUMUP";
     if (!ok) return;
 
+    let completed = false;
     try {
       setSubmitting(true);
       if (method === "PIN") {
         await apiPayOrder(orderId, { method: "PIN", paymentRef: "PIN-STUB" });
       } else if (method === "CASH") {
         await apiPayOrder(orderId, { method: "CASH", cashReceivedCents: receivedCents });
-      } else {
-        // For gift flow demo, treat as cash-equivalent without amount
+      } else if (method === "GIFTCARD") {
         await apiPayOrder(orderId, { method: "PIN", paymentRef: "GIFT-STUB" });
+      } else if (method === "SUMUP") {
+        try {
+          console.log("[sumup] start", { lockedOrderId });
+        } catch {}
+        setSubmitting(false);
+        const created = await sumupCreateCheckout(lockedOrderId);
+        const pid = created?.providerCheckoutId || null;
+        if (!pid) {
+          setToast("SumUp checkout kon niet worden aangemaakt");
+          return;
+        }
+        setSumupProviderCheckoutId(pid);
+        setView("SUMUP_WAIT");
+        setSumupStatus("PENDING");
+        setSumupStartedAt(Date.now());
+        setSumupLastPolledAt(null);
+        if (sumupPollRef.current) {
+          clearInterval(sumupPollRef.current);
+          sumupPollRef.current = null;
+        }
+        sumupPollRef.current = setInterval(async () => {
+          try {
+            const res = await sumupPollCheckout(pid);
+            const status = res?.status;
+            setSumupStatus(status || null);
+            setSumupLastPolledAt(Date.now());
+            const started = sumupStartedAt || Date.now();
+            if (Date.now() - started > 120000) {
+              if (sumupPollRef.current) {
+                clearInterval(sumupPollRef.current);
+                sumupPollRef.current = null;
+              }
+              setToast("Timeout: geen bevestiging");
+              setView("CHECKOUT_IDLE");
+              return;
+            }
+            if (status === "PAID") {
+              if (sumupPollRef.current) {
+                clearInterval(sumupPollRef.current);
+                sumupPollRef.current = null;
+              }
+              try {
+                const o = await apiGetOrder(lockedOrderId);
+                setServerOrder({
+                  id: o.id,
+                  lines: o.lines.map((l) => ({ title: l.title, qty: l.qty, priceCents: l.priceCents })),
+                  subtotalExclVatCents: o.subtotalExclVatCents ?? 0,
+                  totalInclVatCents: o.totalInclVatCents ?? 0,
+                  vatBreakdown: o.vatBreakdown as any,
+                  receiptLabel: (o as any).receiptLabel ?? null,
+                  draftLabel: (o as any).draftLabel ?? null,
+                });
+              } catch {}
+              setView("CHECKOUT_COMPLETE");
+            } else if (status === "FAILED" || status === "EXPIRED" || status === "CANCELED") {
+              if (sumupPollRef.current) {
+                clearInterval(sumupPollRef.current);
+                sumupPollRef.current = null;
+              }
+              setToast("SumUp betaling mislukt of verlopen");
+              setView("CHECKOUT_IDLE");
+            }
+          } catch (_e) {
+            // transient error
+          }
+        }, 1500);
+        return;
       }
-      // Refetch to pick up receiptLabel immediately after payment
       try {
-        const o = await apiGetOrder(orderId);
+        const o = await apiGetOrder(lockedOrderId);
         setServerOrder({
           id: o.id,
           lines: o.lines.map((l) => ({ title: l.title, qty: l.qty, priceCents: l.priceCents })),
@@ -150,22 +250,29 @@ export default function CheckoutScreen() {
           receiptLabel: (o as any).receiptLabel ?? null,
           draftLabel: (o as any).draftLabel ?? null,
         });
-      } catch {
-        // ignore; UI will still proceed
+      } catch {}
+      completed = true;
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const code = e?.response?.data?.error?.message || e?.message;
+      if (status === 409 && code === "ALREADY_FINALIZED") {
+        completed = true;
+      } else {
+        console.warn("Checkout finalize failed", e);
+        const msg = code ? `Bon afronden mislukt — ${String(code)}` : "Bon afronden mislukt — probeer opnieuw";
+        setToast(msg);
       }
-    } catch (e) {
-      // Safety: still allow completion UI, do not brick app
-      console.warn("transition to COMPLETED failed", e);
-      setToast("Bon afronden mislukt — offline verdergegaan");
     } finally {
-      setSubmitting(false);
-      setView("CHECKOUT_COMPLETE");
+      if (method !== "SUMUP") {
+        setSubmitting(false);
+        if (completed) setView("CHECKOUT_COMPLETE");
+      }
     }
   }
-  // Auto-print receipt once after checkout complete
+  // Auto-print receipt once after checkout complete (respect setting)
   useEffect(() => {
     (async () => {
-      if (view !== "CHECKOUT_COMPLETE" || autoPrinted) return;
+      if (view !== "CHECKOUT_COMPLETE" || autoPrinted || !autoPrintEnabled) return;
       if (!orderId) return;
       try {
         setAutoPrinted(true);
@@ -174,9 +281,14 @@ export default function CheckoutScreen() {
         setToast("Bon printen mislukt — gebruik ‘Print laatste bon’");
       }
     })();
-  }, [view, autoPrinted, orderId]);
+  }, [view, autoPrinted, orderId, autoPrintEnabled]);
 
   function onAbort() {
+    if (sumupPollRef.current) {
+      clearInterval(sumupPollRef.current);
+      sumupPollRef.current = null;
+    }
+    lockedOrderIdRef.current = null;
     navigate("/pos");
   }
   const [creatingNext, setCreatingNext] = useState(false);
@@ -186,6 +298,7 @@ export default function CheckoutScreen() {
       setCreatingNext(true);
       const created = await apiCreateOrder();
       setActiveOrderId(created.id);
+      lockedOrderIdRef.current = null;
       navigate("/pos");
     } catch (_e) {
       // Fallback: still return to POS; cashier can create manually
@@ -269,9 +382,10 @@ export default function CheckoutScreen() {
         {/* RIGHT column */}
         <section className="checkout-right">
           <div className="pay-tiles stacked">
-            <button className={`pay-tile large soft-green ${method === "CASH" ? "active" : ""}`} onClick={() => selectMethod("CASH")}>Contant</button>
-            <button className={`pay-tile large soft-blue ${method === "PIN" ? "active" : ""}`} onClick={() => selectMethod("PIN")}>Pin</button>
-            <button className={`pay-tile large soft-purple ${method === "GIFTCARD" ? "active" : ""}`} onClick={() => selectMethod("GIFTCARD")}>Kadobon</button>
+            <button className={`pay-tile large soft-green ${method === "CASH" ? "active" : ""}`} onClick={() => selectMethod("CASH")} disabled={view === "SUMUP_WAIT"}>Contant</button>
+            <button className={`pay-tile large soft-blue ${method === "PIN" ? "active" : ""}`} onClick={() => selectMethod("PIN")} disabled={view === "SUMUP_WAIT"}>Pin</button>
+            <button className={`pay-tile large soft-purple ${method === "GIFTCARD" ? "active" : ""}`} onClick={() => selectMethod("GIFTCARD")} disabled={view === "SUMUP_WAIT"}>Kadobon</button>
+            <button className={`pay-tile large soft-blue ${method === "SUMUP" ? "active" : ""}`} onClick={() => selectMethod("SUMUP")} disabled={view === "SUMUP_WAIT"}>SumUp</button>
           </div>
 
           <div className="pay-context">
@@ -304,6 +418,40 @@ export default function CheckoutScreen() {
                   <input className="gift-input" value={giftCode} onChange={(e) => setGiftCode(e.target.value)} placeholder="—" />
                 </label>
                 <div className="pay-note">Cadeaubon (demo) — druk op Verder.</div>
+              </div>
+            )}
+
+            {view === "SUMUP_WAIT" && (
+              <div className="gift-grid">
+                <div className="complete-title">Wachten op SumUp betaling…</div>
+                <div style={{ fontSize: 24, fontWeight: 800 }}>{formatEuro(totalCents)}</div>
+                <div style={{ opacity: 0.8 }}>
+                  Bon {serverOrder?.receiptLabel || serverOrder?.draftLabel || orderId}
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  Status: <span style={{ fontWeight: 600 }}>{(sumupStatus || "PENDING").toString()}</span>
+                </div>
+                <div style={{ opacity: 0.7, fontSize: 12 }}>
+                  Laatst gecheckt: {sumupLastPolledAt ? new Date(sumupLastPolledAt).toLocaleTimeString() : "—"}
+                </div>
+                {sumupProviderCheckoutId && (
+                  <div style={{ opacity: 0.6, fontSize: 12, marginTop: 8 }}>Checkout-ID: {sumupProviderCheckoutId}</div>
+                )}
+                <div style={{ marginTop: 12 }}>
+                  <button
+                    className="btn danger"
+                    onClick={() => {
+                      if (sumupPollRef.current) {
+                        clearInterval(sumupPollRef.current);
+                        sumupPollRef.current = null;
+                      }
+                      lockedOrderIdRef.current = null;
+                      setView("CHECKOUT_IDLE");
+                    }}
+                  >
+                    Annuleren
+                  </button>
+                </div>
               </div>
             )}
 
@@ -363,7 +511,7 @@ export default function CheckoutScreen() {
               disabled={
                 (view === "CASH_HELP" && receivedCents < totalCents) ||
                 (view === "CHECKOUT_IDLE" && method == null) ||
-                submitting || creatingNext
+                submitting || creatingNext || view === "SUMUP_WAIT"
               }
             >
               {view === "CHECKOUT_COMPLETE" ? "Gereed (volgende klant)" : "Bevestig"}
@@ -398,6 +546,7 @@ function methodLabel(m: PayMethod | null) {
   if (m === "CASH") return "Contant";
   if (m === "PIN") return "Pin";
   if (m === "GIFTCARD") return "Cadeaubon";
+  if (m === "SUMUP") return "SumUp";
   return "—";
 }
 

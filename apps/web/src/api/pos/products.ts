@@ -11,21 +11,18 @@ export type Product = {
   vatRate?: { id: string; name: string; rate: number } | null;
 };
 
-function tenantHeaders() {
-  const tenantId = localStorage.getItem("tenantId") || "cafetaria-centrum";
-  return { headers: { "x-tenant-id": tenantId } };
-}
+// tenantHeaders() removed — tenant is injected by http.ts interceptor
 
 const base = "/core/catalog/products";
 
 export async function apiListProducts(): Promise<Product[]> {
-  const res = await http.get<any>(base, tenantHeaders());
+  const res = await http.get<any>(base);
   const products: Product[] = res.data?.products ?? res.data?.data ?? [];
   return products;
 }
 
 export async function apiGetProduct(id: string): Promise<Product> {
-  const res = await http.get<any>(`${base}/${id}`, tenantHeaders());
+  const res = await http.get<any>(`${base}/${id}`);
   return res.data?.data ?? res.data?.product;
 }
 
@@ -37,7 +34,7 @@ export async function apiCreateProduct(payload: {
   productGroupId?: string | null;
   vatRateId?: string | null;
 }): Promise<Product> {
-  const res = await http.post<any>(base, payload, tenantHeaders());
+  const res = await http.post<any>(base, payload);
   return res.data?.data ?? res.data?.product;
 }
 
@@ -52,10 +49,10 @@ export async function apiUpdateProduct(
     vatRateId?: string | null;
   }>
 ): Promise<Product> {
-  const res = await http.put<any>(`${base}/${id}`, payload, tenantHeaders());
+  const res = await http.put<any>(`${base}/${id}`, payload);
   return res.data?.data ?? res.data?.product;
 }
 
 export async function apiDeleteProduct(id: string): Promise<void> {
-  await http.delete(`${base}/${id}`, tenantHeaders());
+  await http.delete(`${base}/${id}`);
 }

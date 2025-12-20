@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchOrdersList, type OrderListItem } from "../api/orders";
-import { apiPrintOrder } from "../api/print";
+import { apiPrintReceipt } from "../api/print";
 import { usePosSession } from "../stores/posSessionStore";
 
 function formatEuro(cents: number): string {
@@ -210,7 +210,7 @@ export default function OrdersPage() {
                     e.stopPropagation();
                     if (!o.receiptLabel) return; // only print paid
                     setActingId(o.id);
-                    apiPrintOrder(o.id)
+                    apiPrintReceipt(o.id)
                       .catch(() => {})
                       .finally(() => setActingId(null));
                   }}

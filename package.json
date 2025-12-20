@@ -23,9 +23,13 @@
     "prisma:generate": "npm --workspace packages/db run prisma:generate",
     "prisma:migrate": "npm --workspace packages/db run prisma:migrate",
     "db:migrate": "npm --workspace packages/db run prisma:migrate",
-    "db:seed": "npm --workspace packages/db run prisma:seed"
+    "db:seed": "npm --workspace packages/db run prisma:seed",
+    "db:studio": "npm --workspace packages/db run prisma:studio",
+    "smoke:api": "bash scripts/smoke-api.sh"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^20",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3"

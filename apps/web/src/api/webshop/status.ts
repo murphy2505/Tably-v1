@@ -7,12 +7,9 @@ export type WebshopStatus = {
   note?: string;
 };
 
-function tenantHeaders() {
-  const tenantId = (import.meta as any).env?.VITE_DEFAULT_TENANT_ID || "cafetaria-centrum";
-  return { headers: { "x-tenant-id": tenantId } };
-}
+// tenantHeaders() removed — tenant is injected by http.ts interceptor
 
 export async function apiGetWebshopStatus(at?: string): Promise<WebshopStatus> {
-  const res = await http.get<WebshopStatus>("/core/webshop/status", { ...tenantHeaders(), params: { at } });
+  const res = await http.get<WebshopStatus>("/core/webshop/status", { params: { at } });
   return res.data as any;
 }

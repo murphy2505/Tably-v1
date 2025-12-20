@@ -3,7 +3,10 @@ node_modules/
 *.log
 
 # Env
+# Ignore root and nested .env files (explicitly include db paths)
 .env
+packages/db/.env
+packages/db/prisma/.env
 
 # TypeScript build outputs
 /dist

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { asyncHandler, validationError } from "../../lib/http";
 import * as ctrl from "./controller";
 import {
@@ -21,13 +21,13 @@ export const catalogRouter = Router();
 // ===============================
 catalogRouter.get("/revenue-groups", asyncHandler(ctrl.listRevenueGroups));
 
-catalogRouter.post("/revenue-groups", (req, res, next) => {
+catalogRouter.post("/revenue-groups", (req: Request, res: Response, next: NextFunction) => {
   const parsed = revenueGroupCreateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
   return asyncHandler(ctrl.createRevenueGroup)(req, res, next);
 });
 
-catalogRouter.put("/revenue-groups/:id", (req, res, next) => {
+catalogRouter.put("/revenue-groups/:id", (req: Request, res: Response, next: NextFunction) => {
   const parsed = revenueGroupUpdateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
   return asyncHandler(ctrl.updateRevenueGroup)(req, res, next);
@@ -47,13 +47,13 @@ catalogRouter.get("/tax-rates", asyncHandler(ctrl.listVatRates));
 // ===============================
 catalogRouter.get("/product-groups", asyncHandler(ctrl.listProductGroups));
 
-catalogRouter.post("/product-groups", (req, res, next) => {
+catalogRouter.post("/product-groups", (req: Request, res: Response, next: NextFunction) => {
   const parsed = productGroupCreateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
   return asyncHandler(ctrl.createProductGroup)(req, res, next);
 });
 
-catalogRouter.put("/product-groups/:id", (req, res, next) => {
+catalogRouter.put("/product-groups/:id", (req: Request, res: Response, next: NextFunction) => {
   const parsed = productGroupUpdateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
   return asyncHandler(ctrl.updateProductGroup)(req, res, next);
@@ -66,13 +66,13 @@ catalogRouter.delete("/product-groups/:id", asyncHandler(ctrl.deleteProductGroup
 // ===============================
 catalogRouter.get("/categories", asyncHandler(ctrl.listCategories));
 
-catalogRouter.post("/categories", (req, res, next) => {
+catalogRouter.post("/categories", (req: Request, res: Response, next: NextFunction) => {
   const parsed = categoryCreateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
   return asyncHandler(ctrl.createCategory)(req, res, next);
 });
 
-catalogRouter.put("/categories/:id", (req, res, next) => {
+catalogRouter.put("/categories/:id", (req: Request, res: Response, next: NextFunction) => {
   const parsed = categoryUpdateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
   return asyncHandler(ctrl.updateCategory)(req, res, next);
@@ -86,13 +86,13 @@ catalogRouter.delete("/categories/:id", asyncHandler(ctrl.deleteCategory));
 catalogRouter.get("/products", asyncHandler(ctrl.listProducts));
 catalogRouter.get("/products/:id", asyncHandler(ctrl.getProduct));
 
-catalogRouter.post("/products", (req, res, next) => {
+catalogRouter.post("/products", (req: Request, res: Response, next: NextFunction) => {
   const parsed = productCreateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
   return asyncHandler(ctrl.createProduct)(req, res, next);
 });
 
-catalogRouter.put("/products/:id", (req, res, next) => {
+catalogRouter.put("/products/:id", (req: Request, res: Response, next: NextFunction) => {
   const parsed = productUpdateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
   return asyncHandler(ctrl.updateProduct)(req, res, next);
@@ -105,13 +105,13 @@ catalogRouter.delete("/products/:id", asyncHandler(ctrl.deleteProduct));
 // ===============================
 catalogRouter.get("/variants", asyncHandler(ctrl.listVariants));
 
-catalogRouter.post("/variants", (req, res, next) => {
+catalogRouter.post("/variants", (req: Request, res: Response, next: NextFunction) => {
   const parsed = variantCreateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
   return asyncHandler(ctrl.createVariant)(req, res, next);
 });
 
-catalogRouter.put("/variants/:id", (req, res, next) => {
+catalogRouter.put("/variants/:id", (req: Request, res: Response, next: NextFunction) => {
   const parsed = variantUpdateSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
   return asyncHandler(ctrl.updateVariant)(req, res, next);

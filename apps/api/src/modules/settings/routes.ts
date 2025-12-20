@@ -32,6 +32,41 @@ settingsRouter.put("/core/settings/receipt", asyncHandler(async (req, res) => {
 }));
 
 // =========================
+// POS settings (auto-print after payment)
+// =========================
+settingsRouter.get("/core/settings/pos", asyncHandler(async (req, res) => {
+  const tenantId = req.header("x-tenant-id");
+  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+  const s = await prisma.tenantSettings.findFirst({ where: { tenantId } });
+  const autoPrint = s?.autoPrintReceiptAfterPayment ?? true;
+  return res.json({ settings: { autoPrintReceiptAfterPayment: autoPrint } });
+}));
+
+settingsRouter.put("/core/settings/pos", asyncHandler(async (req, res) => {
+  const tenantId = req.header("x-tenant-id");
+  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+
+  const Body = z.object({ autoPrintReceiptAfterPayment: z.boolean() });
+  const parsed = Body.safeParse(req.body);
+  if (!parsed.success) return validationError(res, parsed.error.issues);
+  const { autoPrintReceiptAfterPayment } = parsed.data;
+
+  const updated = await prisma.tenantSettings.upsert({
+    where: { tenantId },
+    update: { autoPrintReceiptAfterPayment },
+    create: {
+      tenantId,
+      openingHours: {},
+      closures: {},
+      webshopEnabled: true,
+      webshopTimezone: "Europe/Amsterdam",
+      autoPrintReceiptAfterPayment,
+    },
+  });
+  return res.json({ settings: { autoPrintReceiptAfterPayment: updated.autoPrintReceiptAfterPayment } });
+}));
+
+// =========================
 // Printers CRUD
 // =========================
 const PrinterBody = z.object({

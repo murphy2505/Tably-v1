@@ -487,6 +487,8 @@ model TenantSettings {
   messageClosed   String?
   // Receipt number prefix (e.g., "C"), optional
   receiptPrefix   String?
+  // POS: auto-print receipt after payment
+  autoPrintReceiptAfterPayment Boolean @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now()) @updatedAt
 
@@ -513,6 +515,7 @@ model Printer {
   port       Int           @default(9100)
   httpUrl    String?
   paperWidth Int           @default(80) // 80 or 58
+  escposAsciiMode Boolean  @default(true)
   isActive   Boolean       @default(true)
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt

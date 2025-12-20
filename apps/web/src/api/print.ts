@@ -1,13 +1,10 @@
 import http from "../services/http";
 
-function tenantHeaders() {
-  const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || "cafetaria-centrum";
-  return { headers: { "x-tenant-id": tenantId } };
-}
+// tenantHeaders() removed — tenant is injected by http.ts interceptor
 
 export async function apiPrintReceipt(orderId: string): Promise<void> {
   try {
-    await http.post(`/print/receipt`, { orderId }, tenantHeaders());
+    await http.post(`/print/receipt`, { orderId });
   } catch (e: any) {
     const msg = e?.response?.data?.error?.message || e?.message || "PRINT_FAILED";
     throw new Error(`Bon printen mislukt: ${msg}`);
@@ -24,7 +21,7 @@ export async function apiPrintQr(
     if (opts?.title) payload.title = opts.title;
     if (opts?.subtitle) payload.subtitle = opts.subtitle;
     if (opts?.footer) payload.footer = opts.footer;
-    await http.post(`/print/epson/qr`, payload, tenantHeaders());
+    await http.post(`/print/epson/qr`, payload);
   } catch (e: any) {
     const msg = e?.response?.data?.error?.message || e?.message || "PRINT_FAILED";
     throw new Error(`QR printen mislukt: ${msg}`);
@@ -33,7 +30,7 @@ export async function apiPrintQr(
 
 export async function apiPrintTest(): Promise<void> {
   try {
-    await http.post(`/print/test`, {}, tenantHeaders());
+    await http.post(`/print/test`, {});
   } catch (e: any) {
     const msg = e?.response?.data?.error?.message || e?.message || "PRINT_FAILED";
     throw new Error(`Test print mislukt: ${msg}`);
@@ -42,7 +39,7 @@ export async function apiPrintTest(): Promise<void> {
 
 export async function apiPrintLastReceipt(): Promise<string | null> {
   try {
-    const res = await http.post(`/print/receipt/last`, {}, tenantHeaders());
+    const res = await http.post(`/print/receipt/last`, {});
     return res.data?.orderId || null;
   } catch (e: any) {
     const msg = e?.response?.data?.error?.message || e?.message || "PRINT_FAILED";
@@ -52,7 +49,7 @@ export async function apiPrintLastReceipt(): Promise<string | null> {
 
 export async function apiPrintTestKind(kind: "RECEIPT" | "QR_CARD" | "KITCHEN" | "BAR"): Promise<void> {
   try {
-    await http.post(`/print/test-kind`, { kind }, tenantHeaders());
+    await http.post(`/print/test-kind`, { kind });
   } catch (e: any) {
     const msg = e?.response?.data?.error?.message || e?.message || "PRINT_FAILED";
     throw new Error(msg);

@@ -9,15 +9,12 @@ export type VariantDTO = {
   isActive: boolean;
 };
 
-function tenantHeaders() {
-  const tenantId = import.meta.env.VITE_DEFAULT_TENANT_ID || "cafetaria-centrum";
-  return { headers: { "x-tenant-id": tenantId } };
-}
+// tenantHeaders() removed — tenant is injected by http.ts interceptor
 
 const base = "/core/catalog/variants";
 
 export async function apiListVariants(productId: string): Promise<VariantDTO[]> {
-  const res = await http.get<{ data: VariantDTO[] }>(`${base}?productId=${encodeURIComponent(productId)}`, tenantHeaders());
+  const res = await http.get<{ data: VariantDTO[] }>(`${base}?productId=${encodeURIComponent(productId)}`);
   return res.data.data;
 }
 
@@ -28,7 +25,7 @@ export async function apiCreateVariant(payload: {
   sortOrder?: number;
   isActive?: boolean;
 }): Promise<VariantDTO> {
-  const res = await http.post<{ data: VariantDTO }>(base, payload, tenantHeaders());
+  const res = await http.post<{ data: VariantDTO }>(base, payload);
   return res.data.data;
 }
 
@@ -41,10 +38,10 @@ export async function apiUpdateVariant(
     isActive?: boolean;
   }>
 ): Promise<VariantDTO> {
-  const res = await http.put<{ data: VariantDTO }>(`${base}/${id}`, payload, tenantHeaders());
+  const res = await http.put<{ data: VariantDTO }>(`${base}/${id}`, payload);
   return res.data.data;
 }
 
 export async function apiDeleteVariant(id: string): Promise<void> {
-  await http.delete(`${base}/${id}`, tenantHeaders());
+  await http.delete(`${base}/${id}`);
 }

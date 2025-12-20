@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../../lib/prisma";
 import { getTenantIdFromRequest } from "../../tenant";
-import { escposTcpTestPrint, type EscposDriver } from "../../services/printer/escposTcp";
+import { printTest } from "../../services/printing";
 
 type Vendor = "STAR" | "EPSON" | "GENERIC_ESCPOS";
 type PrintKind = "RECEIPT" | "QR_CARD" | "KITCHEN" | "BAR";
@@ -21,7 +21,7 @@ function driverFromVendor(vendor: Vendor): "ESC_POS_TCP" | "STAR_ESC_POS_TCP" {
 export const hardwareRouter = Router();
 
 // Printers CRUD
-hardwareRouter.get("/hardware/printers", async (req, res) => {
+hardwareRouter.get("/printers", async (req, res) => {
   try {
     const tenantId = getTenantIdFromRequest(req);
     const printers = await prisma.printer.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } });
@@ -33,6 +33,7 @@ hardwareRouter.get("/hardware/printers", async (req, res) => {
       host: p.host,
       port: p.port,
       paperWidthMm: p.paperWidth ?? 80,
+      escposAsciiMode: p.escposAsciiMode ?? true,
       isActive: p.isActive,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
@@ -43,10 +44,10 @@ hardwareRouter.get("/hardware/printers", async (req, res) => {
   }
 });
 
-hardwareRouter.post("/hardware/printers", async (req, res) => {
+hardwareRouter.post("/printers", async (req, res) => {
   try {
     const tenantId = getTenantIdFromRequest(req);
-    const { name, host, port, vendor, paperWidthMm, isActive } = req.body || {};
+    const { name, host, port, vendor, paperWidthMm, isActive, escposAsciiMode } = req.body || {};
     if (!name || typeof name !== "string") return res.status(400).json({ error: { message: "NAME_REQUIRED" } });
     if (!host || typeof host !== "string") return res.status(400).json({ error: { message: "HOST_REQUIRED" } });
     const p = Number(port ?? 9100);
@@ -63,6 +64,7 @@ hardwareRouter.post("/hardware/printers", async (req, res) => {
         host,
         port: p,
         paperWidth: paper,
+        escposAsciiMode: drv === "ESC_POS_TCP" ? Boolean(escposAsciiMode ?? true) : undefined,
         isActive: Boolean(isActive ?? true),
       },
     });
@@ -75,6 +77,7 @@ hardwareRouter.post("/hardware/printers", async (req, res) => {
       host: created.host,
       port: created.port,
       paperWidthMm: created.paperWidth ?? 80,
+      escposAsciiMode: created.escposAsciiMode ?? true,
       isActive: created.isActive,
       createdAt: created.createdAt,
       updatedAt: created.updatedAt,
@@ -84,13 +87,13 @@ hardwareRouter.post("/hardware/printers", async (req, res) => {
   }
 });
 
-hardwareRouter.patch("/hardware/printers/:id", async (req, res) => {
+hardwareRouter.patch("/printers/:id", async (req, res) => {
   try {
     const tenantId = getTenantIdFromRequest(req);
     const id = String(req.params.id);
     const existing = await prisma.printer.findFirst({ where: { id, tenantId } });
     if (!existing) return res.status(404).json({ error: { message: "NOT_FOUND" } });
-    const { name, host, port, vendor, paperWidthMm, isActive } = req.body || {};
+    const { name, host, port, vendor, paperWidthMm, isActive, escposAsciiMode } = req.body || {};
     const update: any = {};
     if (typeof name === "string") update.name = name;
     if (typeof host === "string") update.host = host;
@@ -106,6 +109,7 @@ hardwareRouter.patch("/hardware/printers/:id", async (req, res) => {
     }
     if (typeof isActive === "boolean") update.isActive = isActive;
     if (typeof vendor === "string") update.driver = driverFromVendor(vendor as Vendor) as any;
+    if (typeof escposAsciiMode !== "undefined") update.escposAsciiMode = Boolean(escposAsciiMode);
 
     const updated = await prisma.printer.update({ where: { id }, data: update });
     res.json({ printer: {
@@ -116,6 +120,7 @@ hardwareRouter.patch("/hardware/printers/:id", async (req, res) => {
       host: updated.host,
       port: updated.port,
       paperWidthMm: updated.paperWidth ?? 80,
+      escposAsciiMode: updated.escposAsciiMode ?? true,
       isActive: updated.isActive,
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,
@@ -125,7 +130,7 @@ hardwareRouter.patch("/hardware/printers/:id", async (req, res) => {
   }
 });
 
-hardwareRouter.delete("/hardware/printers/:id", async (req, res) => {
+hardwareRouter.delete("/printers/:id", async (req, res) => {
   try {
     const tenantId = getTenantIdFromRequest(req);
     const id = String(req.params.id);
@@ -139,15 +144,15 @@ hardwareRouter.delete("/hardware/printers/:id", async (req, res) => {
 });
 
   // Test print a specific printer
-hardwareRouter.post("/hardware/printers/:id/test", async (req, res) => {
+hardwareRouter.post("/printers/:id/test", async (req, res) => {
   try {
     const tenantId = getTenantIdFromRequest(req);
     const id = String(req.params.id);
     const p = await prisma.printer.findFirst({ where: { id, tenantId } });
     if (!p) return res.status(404).json({ error: { message: "NOT_FOUND" } });
 
-    const drv: EscposDriver = (p.driver as any) === "STAR_ESC_POS_TCP" ? "STAR_ESC_POS_TCP" : "ESC_POS_TCP";
-    await escposTcpTestPrint(p.host, p.port, drv);
+    console.log("[hardware.printer.test]", { tenantId, id: p.id, name: p.name, host: p.host, port: p.port, driver: p.driver });
+    await printTest({ id: p.id, name: p.name, driver: p.driver as any, host: p.host, port: p.port, httpUrl: p.httpUrl ?? null, paperWidth: p.paperWidth });
     res.json({ ok: true });
   } catch (e: any) {
     res.status(500).json({ error: { message: "PRINT_FAILED", details: e?.message || String(e) } });
@@ -155,7 +160,7 @@ hardwareRouter.post("/hardware/printers/:id/test", async (req, res) => {
 });
 
 // Print routes CRUD (tenant mapping)
-hardwareRouter.get("/hardware/print-routes", async (req, res) => {
+hardwareRouter.get("/print-routes", async (req, res) => {
   try {
     const tenantId = getTenantIdFromRequest(req);
     const routes = await prisma.printRoute.findMany({ where: { tenantId }, include: { printer: true } });
@@ -166,7 +171,7 @@ hardwareRouter.get("/hardware/print-routes", async (req, res) => {
   }
 });
 
-hardwareRouter.put("/hardware/print-routes", async (req, res) => {
+hardwareRouter.put("/print-routes", async (req, res) => {
   try {
     const tenantId = getTenantIdFromRequest(req);
     const payload = (req.body || {}) as { routes?: Array<{ kind: PrintKind; printerId: string; isDefault?: boolean }> };
