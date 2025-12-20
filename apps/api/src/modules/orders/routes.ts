@@ -82,6 +82,88 @@ ordersRouter.post("/core/orders/:id/transition", asyncHandler(async (req, res) =
   return res.json({ order: updated });
 }));
 
+// DELETE order: only for QUICK empty orders in OPEN/PARKED without payments
+ordersRouter.delete("/core/orders/:id", asyncHandler(async (req, res) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
+  const id = String(req.params.id);
+  const ord = await prisma.order.findFirst({ where: { id, tenantId }, include: { lines: true } });
+  if (!ord) return notFound(res);
+  const isQuick = (ord as any).kind === "QUICK";
+  const deletableStatus = ord.status === ("OPEN" as any) || ord.status === ("PARKED" as any);
+  const noPayments = !ord.paidAt;
+  if (!isQuick || !deletableStatus || !noPayments || ord.lines.length !== 0) {
+    return res.status(409).json({ error: { message: "CANNOT_DELETE_ORDER" } });
+  }
+  await prisma.order.delete({ where: { id } });
+  return res.json({ ok: true });
+}));
+
+// VOID quick order: set status=VOIDED; only allowed for QUICK in OPEN/PARKED and no payments
+ordersRouter.post("/core/orders/:id/void", asyncHandler(async (req, res) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
+  const id = String(req.params.id);
+  const ord = await prisma.order.findFirst({ where: { id, tenantId }, include: { lines: true } });
+  if (!ord) return notFound(res);
+  const isQuick = (ord as any).kind === "QUICK";
+  const allowedStatus = ord.status === ("OPEN" as any) || ord.status === ("PARKED" as any);
+  const noPayments = !ord.paidAt;
+  if (!isQuick || !allowedStatus || !noPayments) {
+    return res.status(409).json({ error: { message: "CANNOT_VOID_ORDER" } });
+  }
+  const Body = z.object({ reason: z.string().max(200).optional() }).optional();
+  const parsed = Body.safeParse(req.body);
+  if (!parsed.success) return validationError(res, parsed.error.issues);
+  const reason = parsed.data?.reason ?? null;
+  const updated = await prisma.order.update({ where: { id }, data: { status: "VOIDED" as any, voidReason: reason } });
+  sseBroadcast(tenantId, "order", { type: "ORDER_UPDATED", orderId: id, status: updated.status, updatedAt: new Date().toISOString() });
+  return res.json({ order: updated });
+}));
+
+// PARK quick order: set status=PARKED; only for QUICK in OPEN and no payments
+ordersRouter.post("/core/orders/:id/park", asyncHandler(async (req, res) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
+  const id = String(req.params.id);
+  const ord = await prisma.order.findFirst({ where: { id, tenantId }, include: { lines: true } });
+  if (!ord) return notFound(res);
+  const isQuick = (ord as any).kind === "QUICK";
+  const allowedStatus = ord.status === ("OPEN" as any);
+  const noPayments = !ord.paidAt;
+  if (!isQuick || !allowedStatus || !noPayments) {
+    return res.status(409).json({ error: { message: "CANNOT_PARK_ORDER" } });
+  }
+  const Body = z.object({ label: z.string().max(64).optional() }).optional();
+  const parsed = Body.safeParse(req.body);
+  if (!parsed.success) return validationError(res, parsed.error.issues);
+  const label = parsed.data?.label ?? null;
+  const updated = await prisma.order.update({ where: { id }, data: { status: "PARKED" as any, draftLabel: label } });
+  sseBroadcast(tenantId, "order", { type: "ORDER_UPDATED", orderId: id, status: updated.status, updatedAt: new Date().toISOString() });
+  return res.json({ order: updated });
+}));
+
+// CANCEL tracked order: set status=CANCELLED; only for TRACKED in OPEN/PARKED and no payments
+ordersRouter.post("/core/orders/:id/cancel", asyncHandler(async (req, res) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
+  const id = String(req.params.id);
+  const ord = await prisma.order.findFirst({ where: { id, tenantId } });
+  if (!ord) return notFound(res);
+  const isTracked = (ord as any).kind === "TRACKED";
+  const allowedStatus = ord.status === ("OPEN" as any) || ord.status === ("PARKED" as any);
+  const noPayments = !ord.paidAt;
+  if (!isTracked || !allowedStatus || !noPayments) {
+    return res.status(409).json({ error: { message: "CANNOT_CANCEL_ORDER" } });
+  }
+  const Body = z.object({ reason: z.string().min(1).max(200) });
+  const parsed = Body.safeParse(req.body);
+  if (!parsed.success) return validationError(res, parsed.error.issues);
+  const updated = await prisma.order.update({ where: { id }, data: { status: "CANCELLED" as any, cancelReason: parsed.data.reason, cancelledAt: new Date() } });
+  sseBroadcast(tenantId, "order", { type: "ORDER_UPDATED", orderId: id, status: updated.status, updatedAt: new Date().toISOString() });
+  return res.json({ order: updated });
+}));
+
 // Pay endpoint (MVP): sets status=PAID and stores basic payment info
 ordersRouter.post("/core/orders/:id/pay", asyncHandler(async (req, res) => {
   const tenantId = getTenantIdFromRequest(req);
@@ -130,13 +212,13 @@ ordersRouter.post("/core/orders", asyncHandler(async (req, res) => {
   const tenantId = getTenantIdFromRequest(req);
   if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
 
-  const Body = z.object({ tableId: z.string().nullable().optional() }).optional();
+  const Body = z.object({ tableId: z.string().nullable().optional(), kind: z.enum(["QUICK","TRACKED"]).optional() }).optional();
   const parsed = Body.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error.issues);
 
   const now = new Date();
   const order = await prisma.$transaction(async (tx) => {
-    const created = await tx.order.create({ data: { tenantId, status: "OPEN" as any }, include: { lines: true } });
+    const created = await tx.order.create({ data: { tenantId, status: "OPEN" as any, kind: (parsed.data?.kind ?? "QUICK") as any }, include: { lines: true } });
     const withDraft = await issueDraftNumberTx(tx as any, tenantId, created.id, now);
     return withDraft;
   });
@@ -246,7 +328,7 @@ ordersRouter.get("/core/orders", asyncHandler(async (req, res) => {
   const orders = await prisma.order.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: 200,
     include: { lines: true },
   });
   return res.json({ orders });

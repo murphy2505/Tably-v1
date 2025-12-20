@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useOrders, type OrderLine } from "./stores/ordersStore";
-import { apiCreateOrder, apiAddOrderLine, apiGetOrder, apiTransitionOrder, type OrderDTO } from "./api/pos/orders";
+import { apiCreateOrder, apiAddOrderLine, apiGetOrder, apiTransitionOrder, apiDeleteOrder, apiVoidOrder, apiParkOrder, apiCancelOrder, type OrderDTO } from "./api/pos/orders";
 import { usePosSession } from "./stores/posSessionStore";
 import LastReceiptTrigger from "./components/LastReceiptTrigger";
 import { fetchActivePosMenu } from "./api/pos";
@@ -89,6 +89,10 @@ export function App() {
   const [activeOrder, setActiveOrder] = useState<OrderDTO | null>(null);
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [breakOpen, setBreakOpen] = useState(false);
+  const [breakSubmitting, setBreakSubmitting] = useState(false);
+  const [breakReason, setBreakReason] = useState("");
+  const [breakLabel, setBreakLabel] = useState("");
   const { sentCount, refreshCounts } = useKds();
   useEffect(() => {
     if (!toast) return;
@@ -121,20 +125,24 @@ export function App() {
   const [sheetMenuItemId, setSheetMenuItemId] = useState<string | null>(null);
   const [sheetGroups, setSheetGroups] = useState<Array<{ id: string; name: string; minSelect: number; maxSelect: number; options: { id: string; name: string; priceDeltaCents: number }[] }>>([]);
 
+  async function ensureActiveOrderCreated(): Promise<string> {
+    // Create a backend order only when needed, mirror locally
+    const existing = activeOrderId;
+    if (existing) return existing;
+    const created = await apiCreateOrder();
+    setActiveOrderId(created.id);
+    setActiveOrder(created);
+    syncLocalStoreFromOrder(created);
+    return created.id;
+  }
+
   async function addItemToOrder(item: PosMenuDTO["items"][number]) {
     try {
-      let targetOrderId = activeOrderId;
-      if (!targetOrderId) {
-        const created = await apiCreateOrder();
-        targetOrderId = created.id;
-        setActiveOrderId(created.id);
-        setActiveOrder(created);
-        syncLocalStoreFromOrder(created);
-      }
       const pid = item.product.id; // product id
       // Prefer per-item modifier groups from active menu
       const embeddedGroups = (item as any).modifierGroups || [];
       if (embeddedGroups.length > 0) {
+        // Defer order creation until confirm
         setSheetProduct({ id: pid, name: item.product.name, priceCents: item.priceCents });
         setSheetGroups(embeddedGroups);
         setSheetMenuItemId(item.id);
@@ -146,6 +154,7 @@ export function App() {
         const resp = await apiGetProductModifierGroups(pid);
         const groups = resp.groups || [];
         if (groups.length > 0) {
+          // Defer order creation until confirm
           setSheetProduct({ id: pid, name: item.product.name, priceCents: item.priceCents });
           setSheetGroups(groups);
           setSheetMenuItemId(null);
@@ -155,7 +164,9 @@ export function App() {
       } catch (_e) {
         // ignore; proceed to add without modifiers
       }
-      const updated = await apiAddOrderLine(targetOrderId!, pid, 1, undefined, item.id);
+      // No modifiers: create on first tap if missing, then add
+      const targetOrderId = await ensureActiveOrderCreated();
+      const updated = await apiAddOrderLine(targetOrderId, pid, 1, undefined, item.id);
       setActiveOrder(updated);
       syncLocalStoreFromOrder(updated);
     } catch (e) {
@@ -280,32 +291,38 @@ export function App() {
                 </div>
               </div>
 
-              <div className="bon-total">
-                <div className="bon-total-label">Totaal</div>
-                <div className="bon-total-value">{formatEuro(totalCents)}</div>
-              </div>
+              {activeOrder && (
+                <>
+                  <div className="bon-total">
+                    <div className="bon-total-label">Totaal</div>
+                    <div className="bon-total-value">{formatEuro(totalCents)}</div>
+                  </div>
 
-              <div className="bon-meta">
-                <div>
-                  BTW: {activeOrder?.vatBreakdown
-                    ? (() => {
-                        const vals = Object.values(activeOrder.vatBreakdown || {});
-                        if (!vals || vals.length === 0) return "—";
-                        const parts = vals
-                          .sort((a, b) => a.rateBps - b.rateBps)
-                          .filter((b) => (b?.vatCents ?? 0) > 0)
-                          .map((b) => `${(b.rateBps / 100).toFixed(0)}% ${formatEuro(b.vatCents)}`);
-                        return parts.length > 0 ? parts.join(" • ") : formatEuro(0);
-                      })()
-                    : "—"}
-                </div>
-                <div>Subtotaal excl. btw: {activeOrder ? formatEuro(activeOrder.subtotalExclVatCents) : "—"}</div>
-                <div>Items: {itemsCount}</div>
-              </div>
+                  <div className="bon-meta">
+                    <div>
+                      BTW: {activeOrder?.vatBreakdown
+                        ? (() => {
+                            const vals = Object.values(activeOrder.vatBreakdown || {});
+                            if (!vals || vals.length === 0) return "—";
+                            const parts = vals
+                              .sort((a, b) => a.rateBps - b.rateBps)
+                              .filter((b) => (b?.vatCents ?? 0) > 0)
+                              .map((b) => `${(b.rateBps / 100).toFixed(0)}% ${formatEuro(b.vatCents)}`);
+                            return parts.length > 0 ? parts.join(" • ") : formatEuro(0);
+                          })()
+                        : "—"}
+                    </div>
+                    <div>Subtotaal excl. btw: {activeOrder ? formatEuro(activeOrder.subtotalExclVatCents) : "—"}</div>
+                    <div>Items: {itemsCount}</div>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className={`order-list ${!activeOrder || activeOrder.lines.length === 0 ? "empty" : ""}`}>
-              {!activeOrder || activeOrder.lines.length === 0 ? (
+              {!activeOrder ? (
+                <div>Kies producten om te starten</div>
+              ) : activeOrder.lines.length === 0 ? (
                 <div>Nog geen items</div>
               ) : (
                 activeOrder.lines.map((l) => (
@@ -355,20 +372,11 @@ export function App() {
                 )}
                 <button
                   className="btn"
-                  onClick={async () => {
-                    try {
-                      const created = await apiCreateOrder();
-                      setActiveOrderId(created.id);
-                      setActiveOrder(created);
-                      // mirror to local store for checkout compatibility
-                      setCurrentOrder(created.id);
-                      clearCurrentOrder();
-                      for (const line of created.lines) {
-                        addLine(line.id, line.title, line.priceCents, line.qty);
-                      }
-                    } catch (e) {
-                      console.warn("new order create failed", e);
-                    }
+                  onClick={() => {
+                    // Lazy-create: do not create immediately; just clear current context
+                    clearActiveOrder();
+                    setActiveOrder(null);
+                    clearCurrentOrder();
                   }}
                 >
                   Nieuwe bon
@@ -376,9 +384,7 @@ export function App() {
                 <button className="btn" onClick={() => { clearActiveOrder(); setActiveOrder(null); }}>
                   Hold
                 </button>
-                <button className="btn danger" onClick={() => { clearActiveOrder(); setActiveOrder(null); }}>
-                  Breek af
-                </button>
+                <button className="btn danger" onClick={() => setBreakOpen(true)}>Breek af</button>
                 <button
                   className="btn success"
                   onClick={() => activeOrderId && navigate("/checkout", { state: { orderId: activeOrderId } })}
@@ -391,6 +397,114 @@ export function App() {
           </aside>
         </div>
       </div>
+      {breakOpen && (
+        <div className="checkout-modal-overlay" onClick={() => !breakSubmitting && setBreakOpen(false)}>
+          <div className="checkout-modal" onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, padding: 16 }}>
+            {(() => {
+              const kind = (activeOrder as any)?.kind || "QUICK";
+              const lines = activeOrder?.lines?.length || 0;
+              if (kind === "QUICK" && lines === 0) {
+                return (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    <div style={{ fontWeight: 800 }}>Lege bon verwijderen?</div>
+                    <div className="order-row-meta">De lege quick-bon wordt verwijderd. Er wordt direct een nieuwe bon gestart.</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className="btn" onClick={() => setBreakOpen(false)} disabled={breakSubmitting}>Annuleer</button>
+                      <button className="btn danger" disabled={breakSubmitting} onClick={async () => {
+                        if (!activeOrderId) return;
+                        try {
+                          setBreakSubmitting(true);
+                          await apiDeleteOrder(activeOrderId);
+                          const created = await apiCreateOrder();
+                          setActiveOrderId(created.id);
+                          setActiveOrder(created);
+                        } catch (e) {
+                          setToast("Verwijderen mislukt");
+                        } finally {
+                          setBreakSubmitting(false);
+                          setBreakOpen(false);
+                        }
+                      }}>Verwijder en start nieuw</button>
+                    </div>
+                  </div>
+                );
+              }
+              if (kind === "QUICK" && lines > 0) {
+                return (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    <div style={{ fontWeight: 800 }}>Quick-bon afsluiten</div>
+                    <div className="order-row-meta">Kies om weg te gooien of te parkeren als concept.</div>
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <button className="btn danger" disabled={breakSubmitting} onClick={async () => {
+                        if (!activeOrderId) return;
+                        try {
+                          setBreakSubmitting(true);
+                          await apiVoidOrder(activeOrderId, breakReason || undefined);
+                          const created = await apiCreateOrder();
+                          setActiveOrderId(created.id);
+                          setActiveOrder(created);
+                        } catch (e) {
+                          setToast("Weggooien mislukt");
+                        } finally {
+                          setBreakSubmitting(false);
+                          setBreakOpen(false);
+                          setBreakReason("");
+                        }
+                      }}>Weggooien</button>
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <input className="orders-search" placeholder="Conceptlabel (optioneel)" value={breakLabel} onChange={(e) => setBreakLabel(e.target.value)} />
+                        <button className="btn" disabled={breakSubmitting} onClick={async () => {
+                          if (!activeOrderId) return;
+                          try {
+                            setBreakSubmitting(true);
+                            await apiParkOrder(activeOrderId, breakLabel || undefined);
+                            const created = await apiCreateOrder();
+                            setActiveOrderId(created.id);
+                            setActiveOrder(created);
+                          } catch (e) {
+                            setToast("Parkeren mislukt");
+                          } finally {
+                            setBreakSubmitting(false);
+                            setBreakOpen(false);
+                            setBreakLabel("");
+                          }
+                        }}>Parkeren als concept</button>
+                      </div>
+                      <button className="btn" onClick={() => setBreakOpen(false)} disabled={breakSubmitting}>Annuleer</button>
+                    </div>
+                  </div>
+                );
+              }
+              // TRACKED flow
+              return (
+                <div style={{ display: "grid", gap: 12 }}>
+                  <div style={{ fontWeight: 800 }}>Bestelling annuleren</div>
+                  <input className="orders-search" placeholder="Reden (verplicht)" value={breakReason} onChange={(e) => setBreakReason(e.target.value)} />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn" onClick={() => setBreakOpen(false)} disabled={breakSubmitting}>Annuleer</button>
+                    <button className="btn danger" disabled={breakSubmitting || breakReason.trim().length === 0} onClick={async () => {
+                      if (!activeOrderId) return;
+                      try {
+                        setBreakSubmitting(true);
+                        await apiCancelOrder(activeOrderId, breakReason.trim());
+                        const created = await apiCreateOrder();
+                        setActiveOrderId(created.id);
+                        setActiveOrder(created);
+                      } catch (e) {
+                        setToast("Annuleren mislukt");
+                      } finally {
+                        setBreakSubmitting(false);
+                        setBreakOpen(false);
+                        setBreakReason("");
+                      }
+                    }}>Annuleer bestelling</button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* POS Bottom Bar */}
       <div className="pos-bottombar">
@@ -426,9 +540,9 @@ export function App() {
           groups={sheetGroups}
           onConfirm={async (selectedOptionIds) => {
             setSheetOpen(false);
-            if (!activeOrderId) return;
             try {
-              const updated = await apiAddOrderLine(activeOrderId, sheetProduct.id, 1, selectedOptionIds, sheetMenuItemId || undefined);
+              const targetOrderId = await ensureActiveOrderCreated();
+              const updated = await apiAddOrderLine(targetOrderId, sheetProduct.id, 1, selectedOptionIds, sheetMenuItemId || undefined);
               setActiveOrder(updated);
               syncLocalStoreFromOrder(updated);
             } catch (e) {

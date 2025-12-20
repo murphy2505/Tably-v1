@@ -49,7 +49,7 @@ export function KdsProvider({ children }: { children: ReactNode }) {
 
   function connect() {
     cleanup();
-    const es = new EventSource(`/pos-api/core/kds/stream?tenantId=${encodeURIComponent(tenantId())}`);
+    const es = new EventSource(`/api/core/kds/stream?tenantId=${encodeURIComponent(tenantId())}`);
     esRef.current = es;
     es.addEventListener("order", () => {
       setLastEventAt(Date.now());

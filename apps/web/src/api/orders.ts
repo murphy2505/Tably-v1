@@ -17,6 +17,7 @@ export type OrderListItem = {
   draftLabel?: string | null;
   draftNo?: number | null;
   customerName?: string | null;
+  kind?: "QUICK" | "TRACKED";
 };
 
 export async function fetchOrdersList(): Promise<OrderDTO[]> {

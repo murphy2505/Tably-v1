@@ -59,7 +59,7 @@ export default function KdsScreen() {
 
     function connect() {
       if (cancelled) return;
-      es = new EventSource(`/pos-api/core/kds/stream?tenantId=${encodeURIComponent(tenantId())}`);
+      es = new EventSource(`/api/core/kds/stream?tenantId=${encodeURIComponent(tenantId())}`);
       es.addEventListener("order", () => {
         loadAll().catch(() => {});
       });

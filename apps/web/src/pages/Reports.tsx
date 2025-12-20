@@ -1,8 +1,8 @@
 export default function Reports() {
   return (
     <div className="page">
-      <h1>Rapporten</h1>
-      <p>Placeholder pagina. Hier komen rapportages.</p>
+      <h1>Rapportages</h1>
+      <p>Overzichten van omzet, producten, voorraad en afgesloten dagjournalen.</p>
     </div>
   );
 }

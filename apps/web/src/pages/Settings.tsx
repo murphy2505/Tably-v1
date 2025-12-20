@@ -1,8 +1,8 @@
 export default function Settings() {
   return (
     <div className="page">
-      <h1>Instellingen</h1>
-      <p>Placeholder pagina. Hier komen instellingen.</p>
+      <h2>Algemeen</h2>
+      <p>Instellingen volgen later. Gebruik de tabs bovenaan voor Printers en Print configuraties.</p>
     </div>
   );
 }

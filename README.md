@@ -121,6 +121,20 @@ curl -s -X POST http://localhost:4002/core/catalog/revenue-groups \
 - The web app fetches `/core/menu/active-pos-menu` and renders a grid of tiles.
 - Configure API base via `VITE_API_URL` (defaults to `http://localhost:4002`).
 
+### iPad Printing via LAN
+- Open POS on iPad Safari at `http://192.168.2.12:5173` (replace with your Mac's LAN IP).
+- Vite dev server proxies `"/api"` to the local backend at `http://127.0.0.1:4002`.
+- Backend listens on `0.0.0.0` and CORS allows `http://localhost:5173` and `http://192.168.2.12:5173` with common methods/headers.
+- Frontend uses relative paths (`/api/...`) so requests work from iPad.
+- Quick test: press the print test button in Settings → Printers or run:
+
+```bash
+curl -sS -X POST http://192.168.2.12:5173/api/print/test \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+Expect `{ ok: true }` and a printed test receipt.
+
 Quick API check used by web:
 ```bash
 curl -s http://localhost:4002/core/menu/active-pos-menu | jq

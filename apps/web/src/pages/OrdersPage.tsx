@@ -16,7 +16,7 @@ function timeLabel(iso: string) {
   return isToday ? hhmm : `${hhmm} • ${ddmm}`;
 }
 
-type StatusFilter = "ALL" | "OPEN" | "KITCHEN" | "READY" | "PAID" | "CANCELLED" | "COMPLETED";
+type StatusFilter = "ALL" | "OPEN" | "KITCHEN" | "READY" | "PAID" | "CANCELLED" | "COMPLETED" | "CONCEPT";
 const STATUS_CHIPS: { key: StatusFilter; label: string }[] = [
   { key: "ALL", label: "Alles" },
   { key: "OPEN", label: "Open" },
@@ -25,6 +25,7 @@ const STATUS_CHIPS: { key: StatusFilter; label: string }[] = [
   { key: "PAID", label: "Betaald" },
   { key: "CANCELLED", label: "Geannuleerd" },
   { key: "COMPLETED", label: "Afgerond" },
+  { key: "CONCEPT", label: "Concept" },
 ];
 
 type DateQuick = "TODAY" | "YESTERDAY" | "WEEK" | "ALL";
@@ -65,6 +66,8 @@ export default function OrdersPage() {
         draftLabel: (o as any).draftLabel ?? null,
         draftNo: (o as any).draftNo ?? null,
         customerName: null,
+        // include kind for filtering if present
+        kind: (o as any).kind ?? "QUICK",
       }));
       // sort desc by createdAt
       list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -90,14 +93,22 @@ export default function OrdersPage() {
     const startOfYesterday = new Date(startOfDay.getTime() - 24 * 3600 * 1000);
     const startOfWeek = new Date(startOfDay.getTime() - (startOfDay.getDay() || 7 - 1) * 24 * 3600 * 1000);
 
-    return orders.filter((o) => {
+    return orders.filter((o: any) => {
       // status
       if (status === "OPEN" && o.status !== "OPEN") return false;
       if (status === "READY" && o.status !== "READY") return false;
       if (status === "PAID" && o.status !== "PAID") return false;
-      if (status === "CANCELLED" && o.status !== "CANCELLED") return false;
+      if (status === "CANCELLED" && !(o.status === "CANCELLED" || o.status === "VOIDED")) return false;
       if (status === "COMPLETED" && o.status !== "COMPLETED") return false;
       if (status === "KITCHEN" && !(o.status === "SENT" || o.status === "IN_PREP")) return false;
+      if (status === "CONCEPT") {
+        const isConcept = (o.status === "PARKED") || (o.kind === "QUICK" && o.status === "OPEN" && !!o.draftLabel);
+        if (!isConcept) return false;
+      } else {
+        // Default cleanliness: hide quick-open noise
+        const hideQuickNoise = (o.kind === "QUICK" && o.status === "OPEN" && !o.receiptLabel && !(o.draftLabel && o.draftLabel.length > 0));
+        if (hideQuickNoise) return false;
+      }
 
       // date quick
       const t = new Date(o.createdAt).getTime();
@@ -128,7 +139,7 @@ export default function OrdersPage() {
     if (k === "open") return "status-chip status-chip--open";
     if (k === "ready") return "status-chip status-chip--ready";
     if (k === "sent" || k === "in_prep") return "status-chip status-chip--kitchen";
-    if (k === "cancelled") return "status-chip status-chip--cancelled";
+    if (k === "cancelled" || k === "voided") return "status-chip status-chip--cancelled";
     if (k === "completed") return "status-chip status-chip--completed";
     return "status-chip";
   }

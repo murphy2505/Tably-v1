@@ -14,6 +14,7 @@ import { errorMiddleware, serviceUnavailable } from "./lib/http";
 import printRouter from "./routes/print";
 import { prisma } from "./lib/prisma";
 import { ensureTenant } from "./ensureTenant";
+import hardwareRouter from "./modules/hardware/routes";
 
 export function createServer() {
   const app = express();
@@ -42,19 +43,18 @@ export function createServer() {
     console.log(`[api] prisma delegates check failed:`, e);
   }
 
-  const allowedOrigins = [
-    "http://localhost:5173",
-    "http://192.168.2.12:5173",
-  ];
+  const originRegex = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.2\.[0-9]+):5173$/;
   app.use(
     cors({
       origin: (origin, callback) => {
         // Allow requests with no origin (like mobile apps or curl) and same-origin
         if (!origin) return callback(null, true);
-        if (allowedOrigins.includes(origin)) return callback(null, true);
+        if (originRegex.test(origin)) return callback(null, true);
         return callback(new Error("Not allowed by CORS"));
       },
       credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "x-tenant-id"],
     })
   );
   app.use(express.json());
@@ -96,6 +96,7 @@ export function createServer() {
   app.use("/", webshopRouter);
   app.use("/", settingsRouter);
   app.use("/", ordersRouter);
+  app.use("/", hardwareRouter);
   app.use("/print", printRouter);
 
   app.use(errorMiddleware);

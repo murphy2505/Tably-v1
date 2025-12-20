@@ -17,6 +17,13 @@ enum OrderStatus {
   PAID
   COMPLETED
   CANCELLED
+  PARKED
+  VOIDED
+}
+
+enum OrderKind {
+  QUICK
+  TRACKED
 }
 
 enum MenuChannel {
@@ -41,6 +48,8 @@ model Tenant {
   vatRates                   VatRate[]
   orders                     Order[]
   orderLines                 OrderLine[]
+  printers                   Printer[]
+  printConfigs               PrintConfig[]
   // New back-relations
   modifierGroups             ModifierGroup[]
   modifierOptions            ModifierOption[]
@@ -373,6 +382,7 @@ model MenuCardItemModifierGroup {
 model Order {
   id       String      @id @default(cuid())
   tenantId String
+  kind     OrderKind   @default(QUICK)
   status   OrderStatus @default(OPEN)
 
   sentAt      DateTime?
@@ -386,6 +396,10 @@ model Order {
   paymentMethod     String?
   paymentRef        String?
   cashReceivedCents Int?
+
+  // Cancellation/voiding context
+  voidReason   String?
+  cancelReason String?
 
   // Receipt numbering (Scanfie-style)
   receiptNo       Int?
@@ -409,6 +423,7 @@ model Order {
   vatBreakdown         Json?
 
   @@index([tenantId, status])
+  @@index([updatedAt])
 }
 
 model ReceiptSequence {
@@ -476,4 +491,99 @@ model TenantSettings {
   updatedAt       DateTime @default(now()) @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// =========================
+// Printing settings (tenant-scoped)
+// =========================
+
+enum PrinterDriver {
+  ESC_POS_TCP
+  STAR_ESC_POS_TCP
+  EPOS_HTTP
+  STARPRNT
+}
+
+model Printer {
+  id         String        @id @default(cuid())
+  tenantId   String
+  name       String
+  driver     PrinterDriver
+  host       String
+  port       Int           @default(9100)
+  httpUrl    String?
+  paperWidth Int           @default(80) // 80 or 58
+  isActive   Boolean       @default(true)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // ✅ REQUIRED opposite relation
+  routes PrintRoute[]
+
+  @@index([tenantId, isActive])
+}
+
+// Logical print targets
+enum PrintKind {
+  RECEIPT
+  QR_CARD
+  KITCHEN
+  BAR
+}
+
+model PrintRoute {
+  id        String    @id @default(cuid())
+  tenantId  String
+  kind      PrintKind
+  printerId String
+  isDefault Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  printer   Printer   @relation(fields: [printerId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, kind])
+  @@index([tenantId])
+}
+
+enum PrintTemplate {
+  CUSTOMER_RECEIPT
+  KITCHEN_TICKET
+  QR_CARD
+}
+
+enum PrintPlan {
+  NEVER
+  ON_PAY
+  ON_SEND_TO_KDS
+  MANUAL
+}
+
+enum PrintChannel {
+  POS
+  WEB
+  TAKEAWAY
+  DELIVERY
+}
+
+model PrintConfig {
+  id                            String         @id @default(cuid())
+  tenantId                      String
+  name                          String
+  template                      PrintTemplate
+  plan                          PrintPlan      @default(MANUAL)
+  targetPrinters                String[] // printer IDs
+  channels                      PrintChannel[]
+  areas                         String[]
+  prepStations                  String[]
+  ignoreLinesWithoutPrepStation Boolean        @default(false)
+  isActive                      Boolean        @default(true)
+  createdAt                     DateTime       @default(now())
+  updatedAt                     DateTime       @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isActive])
 }

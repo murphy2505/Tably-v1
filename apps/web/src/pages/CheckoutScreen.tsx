@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useOrders } from "../stores/ordersStore";
 import { usePosSession } from "../stores/posSessionStore";
 import { apiCreateOrder, apiGetOrder, apiPayOrder } from "../api/pos/orders";
-import { apiPrintOrder, apiPrintQr } from "../api/print";
+import { apiPrintReceipt, apiPrintLastReceipt, apiPrintQr } from "../api/print";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -111,6 +111,7 @@ export default function CheckoutScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [printingOrder, setPrintingOrder] = useState(false);
   const [printingQr, setPrintingQr] = useState(false);
+  const [autoPrinted, setAutoPrinted] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -161,6 +162,19 @@ export default function CheckoutScreen() {
       setView("CHECKOUT_COMPLETE");
     }
   }
+  // Auto-print receipt once after checkout complete
+  useEffect(() => {
+    (async () => {
+      if (view !== "CHECKOUT_COMPLETE" || autoPrinted) return;
+      if (!orderId) return;
+      try {
+        setAutoPrinted(true);
+        await apiPrintReceipt(orderId);
+      } catch (e: any) {
+        setToast("Bon printen mislukt — gebruik ‘Print laatste bon’");
+      }
+    })();
+  }, [view, autoPrinted, orderId]);
 
   function onAbort() {
     navigate("/pos");
@@ -306,7 +320,7 @@ export default function CheckoutScreen() {
                       if (!orderId) return;
                       try {
                         setPrintingOrder(true);
-                        await apiPrintOrder(orderId);
+                        await apiPrintReceipt(orderId);
                         setToast("Geprint");
                       } catch (e: any) {
                         setToast(e?.message || "Print mislukt");
@@ -354,6 +368,23 @@ export default function CheckoutScreen() {
             >
               {view === "CHECKOUT_COMPLETE" ? "Gereed (volgende klant)" : "Bevestig"}
             </button>
+            {view === "CHECKOUT_COMPLETE" && (
+              <button
+                className="btn"
+                style={{ marginLeft: 8 }}
+                onClick={async () => {
+                  try {
+                    const oid = await apiPrintLastReceipt();
+                    setToast(oid ? "Laatste bon geprint" : "Geprint");
+                  } catch (e: any) {
+                    const msg = e?.message || "Print mislukt";
+                    setToast(/NO_PAID_ORDER/.test(msg) ? "Geen betaalde bon gevonden" : msg);
+                  }
+                }}
+              >
+                Print laatste bon
+              </button>
+            )}
           </div>
         </section>
       </div>

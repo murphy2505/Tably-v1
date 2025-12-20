@@ -5,7 +5,8 @@ function tenantHeaders() {
   return { headers: { "x-tenant-id": tenantId } };
 }
 
-export type OrderStatus = "OPEN" | "SENT" | "IN_PREP" | "READY" | "PAID" | "COMPLETED" | "CANCELLED";
+export type OrderStatus = "OPEN" | "SENT" | "IN_PREP" | "READY" | "PAID" | "COMPLETED" | "CANCELLED" | "PARKED" | "VOIDED";
+export type OrderKind = "QUICK" | "TRACKED";
 
 export type OrderLineDTO = {
   id: string;
@@ -18,6 +19,7 @@ export type OrderLineDTO = {
 
 export type OrderDTO = {
   id: string;
+  kind?: OrderKind;
   status: OrderStatus;
   createdAt: string;
   sentAt?: string | null;
@@ -68,6 +70,25 @@ export async function apiAddOrderLine(orderId: string, productId: string, qty: n
   if (selectedOptionIds && selectedOptionIds.length > 0) payload.selectedOptionIds = selectedOptionIds;
   if (menuItemId) payload.menuItemId = menuItemId;
   const res = await http.post<{ order: OrderDTO }>(`/core/orders/${orderId}/lines`, payload, tenantHeaders());
+  return res.data.order;
+}
+
+export async function apiDeleteOrder(orderId: string): Promise<void> {
+  await http.delete(`/core/orders/${orderId}`, tenantHeaders());
+}
+
+export async function apiVoidOrder(orderId: string, reason?: string): Promise<OrderDTO> {
+  const res = await http.post<{ order: OrderDTO }>(`/core/orders/${orderId}/void`, { reason }, tenantHeaders());
+  return res.data.order;
+}
+
+export async function apiParkOrder(orderId: string, label?: string): Promise<OrderDTO> {
+  const res = await http.post<{ order: OrderDTO }>(`/core/orders/${orderId}/park`, { label }, tenantHeaders());
+  return res.data.order;
+}
+
+export async function apiCancelOrder(orderId: string, reason: string): Promise<OrderDTO> {
+  const res = await http.post<{ order: OrderDTO }>(`/core/orders/${orderId}/cancel`, { reason }, tenantHeaders());
   return res.data.order;
 }
 

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const BASE = "/pos-api"; // proxy base
+const BASE = "/api"; // proxy base
 function tenantHeaders() {
   const tenantId = localStorage.getItem("tenantId") || "cafetaria-centrum";
   return { "x-tenant-id": tenantId };

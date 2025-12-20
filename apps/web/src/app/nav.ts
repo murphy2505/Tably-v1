@@ -1,107 +1,38 @@
 import type { LucideIcon } from "lucide-react";
-import {
-  Receipt,
-  Package,
-  Utensils,
-  Tags,
-  Layers,
-  ClipboardList,
-  Gift,
-  BarChart3,
-  Settings,
-  Wallet,
-} from "lucide-react";
-
-export type Role = "cashier" | "manager" | "admin";
+import { ShoppingCart, ClipboardList, Monitor, CalendarCheck, BarChart3, Settings, Package, Gift, Utensils, Tags, Layers, Wallet, Sliders } from "lucide-react";
 
 export type NavItem = {
   path: string;
   label: string;
-  icon: LucideIcon;   // ⬅️ geen string meer
-  roles: Role[];
+  icon: LucideIcon;
   children?: NavItem[];
 };
 
-export const userRole: Role = "admin";
-
+// Left navigation — placeholders for Tably v1 modules (no role gating yet)
 export const NAV: NavItem[] = [
-  {
-    path: "/pos",
-    label: "Kassa",
-    icon: Receipt,
-    roles: ["cashier", "manager", "admin"],
-  },
+  { path: "/pos", label: "POS", icon: ShoppingCart },
+  { path: "/orders", label: "Bestellingen", icon: ClipboardList },
+  { path: "/kds", label: "KDS", icon: Monitor },
   {
     path: "/assortiment",
     label: "Assortiment",
     icon: Package,
-    roles: ["manager", "admin"],
     children: [
-      {
-        path: "/assortiment/products",
-        label: "Producten",
-        icon: Utensils,
-        roles: ["manager", "admin"],
-      },
-      {
-        path: "/assortiment/categories",
-        label: "Categorieën",
-        icon: Tags,
-        roles: ["manager", "admin"],
-      },
-      {
-        path: "/assortiment/courses",
-        label: "Gangen",
-        icon: Layers,
-        roles: ["manager", "admin"],
-      },
-      {
-        path: "/assortiment/menus",
-        label: "Menukaarten",
-        icon: ClipboardList,
-        roles: ["manager", "admin"],
-      },
-      {
-        path: "/assortiment/revenue-groups",
-        label: "Omzetgroepen",
-        icon: Wallet,
-        roles: ["manager", "admin"],
-      },
+      { path: "/assortiment/menus", label: "Menukaarten", icon: ClipboardList },
+      { path: "/assortiment/products", label: "Producten", icon: Utensils },
+      { path: "/assortiment/categories", label: "Categorieën", icon: Tags },
+      { path: "/assortiment/revenue-groups", label: "Omzetgroepen", icon: Wallet },
+      { path: "/assortiment/courses", label: "Gangen", icon: Layers },
+      { path: "/assortiment/modifiers", label: "Modifiers", icon: Sliders },
     ],
   },
-  {
-    path: "/orders",
-    label: "Bestellingen",
-    icon: ClipboardList,
-    roles: ["cashier", "manager", "admin"],
-  },
-  {
-    path: "/loyalty",
-    label: "Loyalty",
-    icon: Gift,
-    roles: ["manager", "admin"],
-  },
-  {
-    path: "/reports",
-    label: "Rapportage",
-    icon: BarChart3,
-    roles: ["manager", "admin"],
-  },
-  {
-    path: "/settings",
-    label: "Instellingen",
-    icon: Settings,
-    roles: ["admin"],
-  },
+  { path: "/loyalty", label: "Loyalty", icon: Gift },
+  { path: "/day-journal", label: "Dagjournaal", icon: CalendarCheck },
+  { path: "/reports", label: "Rapportages", icon: BarChart3 },
+  { path: "/settings", label: "Instellingen", icon: Settings },
 ];
 
-export function filterByRole(items: NavItem[], role: Role): NavItem[] {
-  return items
-    .filter((i) => i.roles.includes(role))
-    .map((i) => ({
-      ...i,
-      children: i.children
-        ? i.children.filter((c) => c.roles.includes(role))
-        : undefined,
-    }));
+// No role filtering for now; keep API for future extension
+export function filterByRole(items: NavItem[]): NavItem[] {
+  return items;
 }
