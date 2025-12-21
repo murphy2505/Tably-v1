@@ -34,6 +34,12 @@ export type OrderDTO = {
   subtotalExclVatCents: number;
   totalInclVatCents: number;
   vatBreakdown?: Record<string, { rateBps: number; grossCents: number; netCents: number; vatCents: number }>;
+  customer?: {
+    id: string;
+    name?: string | null;
+    phoneE164?: string | null;
+    loyalty?: { id: string; points: number } | null;
+  } | null;
 };
 
 export async function apiTransitionOrder(orderId: string, to: OrderStatus): Promise<OrderDTO> {
@@ -94,5 +100,18 @@ export async function apiPayOrder(
   payload: { method: "PIN"; paymentRef?: string } | { method: "CASH"; cashReceivedCents: number }
 ): Promise<OrderDTO> {
   const res = await http.post<{ order: OrderDTO }>(`/core/orders/${orderId}/pay`, payload as any);
+  return res.data.order;
+}
+
+// Link/unlink customer to order
+export async function apiLinkCustomerToOrder(orderId: string, customerId: string): Promise<OrderDTO> {
+  // Relative path → "/api/orders/:id/customer"
+  const res = await http.post<{ order: OrderDTO }>(`orders/${orderId}/customer`, { customerId });
+  return res.data.order;
+}
+
+export async function apiUnlinkCustomerFromOrder(orderId: string): Promise<OrderDTO> {
+  // Relative path → "/api/orders/:id/customer"
+  const res = await http.delete<{ order: OrderDTO }>(`orders/${orderId}/customer`);
   return res.data.order;
 }

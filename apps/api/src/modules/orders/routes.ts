@@ -413,3 +413,73 @@ ordersRouter.get("/core/kds/tickets", asyncHandler(async (req, res) => {
   });
   return res.json({ orders });
 }));
+
+// =============================
+// Order ↔ Customer link/unlink
+// =============================
+
+// Link a customer to an order (tenant-safe)
+ordersRouter.post("/api/orders/:orderId/customer", asyncHandler(async (req, res) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return validationError(res, [{ path: ["x-tenant-id"], message: "TENANT_REQUIRED" }]);
+
+  const Body = z.object({ customerId: z.string() });
+  const parsed = Body.safeParse(req.body);
+  if (!parsed.success) return validationError(res, parsed.error.issues);
+
+  const orderId = String(req.params.orderId);
+  const { customerId } = parsed.data;
+
+  // Ensure order belongs to tenant
+  const order = await prisma.order.findFirst({ where: { id: orderId, tenantId } });
+  if (!order) return res.status(404).json({ error: { message: "ORDER_NOT_FOUND" } });
+
+  // Ensure customer belongs to tenant and is active
+  const customer = await prisma.customer.findFirst({ where: { id: customerId, tenantId, isActive: true } });
+  if (!customer) return res.status(404).json({ error: { message: "CUSTOMER_NOT_FOUND" } });
+
+  const updated = await prisma.order.update({
+    where: { id: orderId },
+    data: { customerId },
+    include: { customer: { include: { loyalty: true } } },
+  });
+  console.log("[orders.customer.link]", { orderId, tenantId, customerId });
+  return res.json({ order: updated });
+}));
+
+// Unlink a customer from an order (tenant-safe)
+ordersRouter.delete("/api/orders/:orderId/customer", asyncHandler(async (req, res) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
+
+  const orderId = String(req.params.orderId);
+  const order = await prisma.order.findFirst({ where: { id: orderId, tenantId } });
+  if (!order) return res.status(404).json({ error: { message: "ORDER_NOT_FOUND" } });
+
+  const updated = await prisma.order.update({
+    where: { id: orderId },
+    data: { customerId: null },
+    include: { customer: { include: { loyalty: true } } },
+  });
+  console.log("[orders.customer.unlink]", { orderId, tenantId });
+  return res.json({ order: updated });
+}));
+
+/*
+Curl tests
+
+1) Link customer to order
+curl -s -X POST http://localhost:4002/api/orders/<ORDER_ID>/customer \
+  -H "x-tenant-id: cafetaria-centrum" \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"<CUSTOMER_ID>"}' | jq
+
+2) Unlink customer from order
+curl -s -X DELETE http://localhost:4002/api/orders/<ORDER_ID>/customer \
+  -H "x-tenant-id: cafetaria-centrum" | jq
+
+3) Negative test: missing tenant header should return 400
+curl -i -X POST http://localhost:4002/api/orders/<ORDER_ID>/customer \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"<CUSTOMER_ID>"}'
+*/

@@ -318,6 +318,24 @@ body {
   border-radius: 8px;
 }
 
+/* Customer box — same sizing as search input, green tint */
+.customer-box {
+  margin: 8px 12px;                 /* align with bon header padding */
+  padding: 10px 12px;               /* match .search-bar input */
+  border: 1px solid rgba(0, 255, 120, 0.18);
+  border-radius: 8px;               /* match .search-bar input */
+  background: rgba(0, 255, 120, 0.10);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.customer-box:hover {
+  background: rgba(0, 255, 120, 0.14);
+}
+
 .product-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--tile-w), 1fr));

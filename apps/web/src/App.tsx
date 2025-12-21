@@ -9,6 +9,9 @@ import type { PosMenuDTO } from "./types/pos";
 import { useKds } from "./stores/kdsStore";
 import { apiGetProductModifierGroups } from "./api/pos/modifiers";
 import ModifierSheet from "./components/pos/ModifierSheet";
+import CustomerBox from "./components/pos/CustomerBox";
+import CustomerModal from "./components/pos/CustomerModal";
+import { apiLinkCustomerToOrder, apiUnlinkCustomerFromOrder } from "./api/pos/orders";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -86,6 +89,7 @@ export function App() {
   }, [menu, activeCategory, search]);
 
   const { activeOrderId, setActiveOrderId, clearActiveOrder } = usePosSession();
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [activeOrder, setActiveOrder] = useState<OrderDTO | null>(null);
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -100,7 +104,7 @@ export function App() {
     return () => clearTimeout(t);
   }, [toast]);
   const totalCents = activeOrder ? activeOrder.totalInclVatCents : 0;
-  const itemsCount = activeOrder ? activeOrder.lines.reduce((s, l) => s + l.qty, 0) : 0;
+  const itemsCount = (activeOrder?.lines ?? []).reduce((s, l) => s + l.qty, 0);
 
   // last receipt is handled via LastReceiptTrigger component
   // Ensure initial fetch for badge at POS mount
@@ -112,7 +116,8 @@ export function App() {
     try {
       setCurrentOrder(ord.id);
       clearCurrentOrder();
-      for (const line of ord.lines) {
+      const lines = ord.lines ?? [];
+      for (const line of lines) {
         addLine(line.id, line.title, line.priceCents, line.qty);
       }
     } catch (e) {
@@ -276,6 +281,34 @@ export function App() {
 
           {/* Right column: bon + actions */}
           <aside className="pos-right">
+            {/* Customer box above bon header (always visible) */}
+            <CustomerBox
+              customer={activeOrder?.customer}
+              onOpen={async () => {
+                // Ensure an order exists so CustomerModal mounts
+                try {
+                  if (!activeOrderId) {
+                    const createdId = await ensureActiveOrderCreated();
+                    const ord = await apiGetOrder(createdId);
+                    setActiveOrder(ord);
+                    syncLocalStoreFromOrder(ord);
+                  }
+                } catch (_e) {
+                  // ignore; modal can still open, but ensureActiveOrderCreated should have handled creation
+                }
+                setCustomerModalOpen(true);
+              }}
+              onUnlink={async () => {
+                if (!activeOrderId) return;
+                try {
+                  const updated = await apiUnlinkCustomerFromOrder(activeOrderId);
+                  setActiveOrder(updated);
+                  syncLocalStoreFromOrder(updated);
+                } catch (e) {
+                  setToast("Loskoppelen mislukt");
+                }
+              }}
+            />
             <div className="bon-header">
               <div className="bon-header-top">
                 {(() => {
@@ -319,13 +352,13 @@ export function App() {
               )}
             </div>
 
-            <div className={`order-list ${!activeOrder || activeOrder.lines.length === 0 ? "empty" : ""}`}>
+            <div className={`order-list ${!activeOrder || (activeOrder.lines ?? []).length === 0 ? "empty" : ""}`}>
               {!activeOrder ? (
                 <div>Kies producten om te starten</div>
-              ) : activeOrder.lines.length === 0 ? (
+              ) : (activeOrder.lines ?? []).length === 0 ? (
                 <div>Nog geen items</div>
               ) : (
-                activeOrder.lines.map((l) => (
+                (activeOrder.lines ?? []).map((l) => (
                   <div key={l.id} className="order-line">
                     <div className="order-line-title">
                       {l.title}
@@ -388,7 +421,7 @@ export function App() {
                 <button
                   className="btn success"
                   onClick={() => activeOrderId && navigate("/checkout", { state: { orderId: activeOrderId } })}
-                  disabled={!activeOrder || activeOrder.lines.length === 0}
+                  disabled={!activeOrder || (activeOrder.lines ?? []).length === 0}
                 >
                   Betaal
                 </button>
@@ -519,6 +552,28 @@ export function App() {
           Bestellingen
         </button>
 
+        {/* Always works: open customer modal */}
+        <button
+          className="bar-btn"
+          onClick={async () => {
+            // Ensure an order exists when linking; opening modal is allowed regardless
+            try {
+              if (!activeOrderId) {
+                const createdId = await ensureActiveOrderCreated();
+                // hydrate activeOrder for immediate banner updates
+                const ord = await apiGetOrder(createdId);
+                setActiveOrder(ord);
+                syncLocalStoreFromOrder(ord);
+              }
+            } catch (e) {
+              // still open; linking action will create if needed
+            }
+            setCustomerModalOpen(true);
+          }}
+        >
+          Klant
+        </button>
+
         <LastReceiptTrigger variant="bottombar" />
 
         <button className="bar-btn" onClick={() => navigate("/kds")}>
@@ -552,6 +607,20 @@ export function App() {
         />
       )}
 
+      {/* Customer modal mounted at POS-level */}
+      {activeOrderId && (
+        <CustomerModal
+          open={customerModalOpen}
+          orderId={activeOrderId!}
+          customer={activeOrder?.customer}
+          onClose={() => setCustomerModalOpen(false)}
+          onOrderUpdated={(updated) => {
+            console.log("[App] setActiveOrder, order.customer:", updated?.customer);
+            setActiveOrder(updated);
+            syncLocalStoreFromOrder(updated);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -37,31 +37,44 @@ model Tenant {
   name      String
   createdAt DateTime @default(now())
 
-  revenueGroups              RevenueGroup[]
-  productGroups              ProductGroup[]
-  categories                 Category[]
-  products                   Product[]
-  variants                   ProductVariant[]
-  menus                      Menu[]
-  courses                    Course[]
-  menuItems                  MenuItem[]
-  vatRates                   VatRate[]
-  orders                     Order[]
-  orderLines                 OrderLine[]
-  printers                   Printer[]
-  printConfigs               PrintConfig[]
-  // New back-relations
-  modifierGroups             ModifierGroup[]
-  modifierOptions            ModifierOption[]
-  productModifierGroups      ProductModifierGroup[]
-  menuCards                  MenuCard[]
+  // Core business
+  revenueGroups RevenueGroup[]
+  vatRates      VatRate[]
+
+  // Products & menus
+  productGroups ProductGroup[]
+  categories    Category[]
+  products      Product[]
+  variants      ProductVariant[]
+  modifierGroups        ModifierGroup[]
+  modifierOptions       ModifierOption[]
+  productModifierGroups ProductModifierGroup[]
+
+  menus       Menu[]
+  courses     Course[]
+  menuItems   MenuItem[]
+  menuCards   MenuCard[]
   menuCardSchedules          MenuCardSchedule[]
   menuCardItems              MenuCardItem[]
   menuCardItemModifierGroups MenuCardItemModifierGroup[]
-  settings                   TenantSettings?
+
+  // Orders & sales
+  orders     Order[]
+  orderLines OrderLine[]
 
   receiptSequences ReceiptSequence[]
   orderSequences   OrderSequence[]
+
+  // Loyalty
+  customers       Customer[]
+  loyaltyAccounts LoyaltyAccount[]
+
+  // Printing
+  printers     Printer[]
+  printConfigs PrintConfig[]
+
+  // Settings
+  settings TenantSettings?
 }
 
 model RevenueGroup {
@@ -385,19 +398,20 @@ model Order {
   kind     OrderKind   @default(QUICK)
   status   OrderStatus @default(OPEN)
 
+  // Lifecycle timestamps
   sentAt      DateTime?
   inPrepAt    DateTime?
   readyAt     DateTime?
   completedAt DateTime?
   cancelledAt DateTime?
 
-  // Payments (MVP)
+  // Payment (MVP)
   paidAt            DateTime?
   paymentMethod     String?
   paymentRef        String?
   cashReceivedCents Int?
 
-  // Cancellation/voiding context
+  // Cancellation / voiding
   voidReason   String?
   cancelReason String?
 
@@ -411,18 +425,25 @@ model Order {
   draftLabel    String?
   draftIssuedAt DateTime?
 
+  // Customer / Loyalty
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  // Totals (computed backend-side, cents)
+  subtotalExclVatCents Int  @default(0)
+  totalInclVatCents    Int  @default(0)
+  vatBreakdown         Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Relations
+  tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lines  OrderLine[]
 
-  // Totals (computed backend-side, cents)
-  subtotalExclVatCents Int   @default(0)
-  totalInclVatCents    Int   @default(0)
-  vatBreakdown         Json?
-
+  // Indexes
   @@index([tenantId, status])
+  @@index([tenantId, customerId])
   @@index([updatedAt])
 }
 
@@ -431,19 +452,22 @@ model Order {
 // =========================
 
 model Customer {
-  id         String   @id @default(cuid())
-  tenantId   String
-  name       String?
-  phoneE164  String?  // E.164 with leading +, optional
-  email      String?
-  isActive   Boolean  @default(true)
-  note       String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String?
+  phoneE164 String?  // E.164 with leading +, optional
+  email     String?
+  isActive  Boolean  @default(true)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  loyalty    LoyaltyAccount?
+  // Relations
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  loyalty LoyaltyAccount?
+  orders  Order[]
 
+  // Constraints / indexes
   @@unique([tenantId, phoneE164])
   @@index([tenantId, createdAt])
   @@index([tenantId, name])
