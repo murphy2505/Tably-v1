@@ -426,6 +426,51 @@ model Order {
   @@index([updatedAt])
 }
 
+// =========================
+// Loyalty — Customers and Accounts
+// =========================
+
+model Customer {
+  id         String   @id @default(cuid())
+  tenantId   String
+  name       String?
+  phoneE164  String?  // E.164 with leading +, optional
+  email      String?
+  isActive   Boolean  @default(true)
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  loyalty    LoyaltyAccount?
+
+  @@unique([tenantId, phoneE164])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, name])
+}
+
+enum LoyaltyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model LoyaltyAccount {
+  id        String        @id @default(cuid())
+  tenantId  String
+  customerId String       @unique
+  points    Int           @default(0)
+  status    LoyaltyStatus @default(ACTIVE)
+  tier      String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @default(now()) @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, points])
+}
+
 model ReceiptSequence {
   id        String   @id @default(cuid())
   tenantId  String

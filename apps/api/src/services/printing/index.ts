@@ -1,6 +1,5 @@
 import type { Buffer } from "buffer";
 import { printEscposTcpDriver } from "./drivers/escposTcp";
-import { printStarTest, printStarReceipt } from "./drivers/star";
 
 export type PrintJobKind = "TEST" | "RECEIPT" | "KITCHEN" | "QR_CARD";
 export type PrintJob = { kind: PrintJobKind; payload?: any };
@@ -18,10 +17,12 @@ export type PrinterLike = {
 
 export async function printToPrinter(printer: PrinterLike, job: PrintJob): Promise<void> {
   const drv = String(printer.driver);
-  if (drv === "STAR_ESC_POS_TCP" || drv === "STARPRNT") {
-    if (job.kind === "TEST") return printStarTest(printer);
-    if (job.kind === "RECEIPT") return printStarReceipt(printer, job.payload || {});
-    throw new Error(`JOB_NOT_SUPPORTED:${job.kind}`);
+  // Route STAR drivers via ESC/POS TCP with STAR-compatible cut sequence
+  if (drv === "STAR_ESC_POS_TCP" || drv === "STARPRNT" || drv === "STAR") {
+    return printEscposTcpDriver(
+      { ...printer, driver: "STAR_ESC_POS_TCP" },
+      job
+    );
   }
   if (drv === "ESC_POS_TCP" || drv === "EPOS_HTTP" || drv === "GENERIC_ESCPOS") {
     return printEscposTcpDriver(printer, job);

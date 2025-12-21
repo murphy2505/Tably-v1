@@ -16,6 +16,7 @@ import { prisma } from "./lib/prisma";
 import { ensureTenant } from "./ensureTenant";
 import hardwareRouter from "./modules/hardware/routes";
 import sumupRouter from "./modules/payments/sumupRoutes";
+import { loyaltyCustomersRouter } from "./modules/loyalty/routes";
 
 export function createServer() {
   const app = express();
@@ -116,6 +117,7 @@ export function createServer() {
   app.use("/api/hardware", hardwareRouter);
   app.use("/api/print", printRouter);
   app.use("/api/payments/sumup", sumupRouter);
+  app.use("/api/loyalty", loyaltyCustomersRouter);
 
   // Backwards compatibility mounts (temporary)
   app.use("/hardware", hardwareRouter);

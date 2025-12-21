@@ -40,7 +40,13 @@ router.post("/test", async (req: Request, res: Response) => {
     return res.json({ ok: true });
   } catch (e: any) {
     const message = e?.message || String(e);
-    return res.status(500).json({ ok: false, error: message });
+    const code = (e && (e.code || e.errno)) || undefined;
+    let status = 500;
+    let error = message;
+    if (/PRINTER_TIMEOUT|PRINT_TIMEOUT/i.test(message)) { status = 504; error = "PRINTER_TIMEOUT"; }
+    else if (code === "ECONNREFUSED") { status = 502; error = "PRINTER_CONNECTION_REFUSED"; }
+    else if (code === "EHOSTUNREACH" || code === "ENETUNREACH") { status = 502; error = "PRINTER_UNREACHABLE"; }
+    return res.status(status).json({ ok: false, error, details: { code, message } });
   }
 });
 
