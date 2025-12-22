@@ -9,7 +9,8 @@ import type { PosMenuDTO } from "./types/pos";
 import { useKds } from "./stores/kdsStore";
 import { apiGetProductModifierGroups } from "./api/pos/modifiers";
 import ModifierSheet from "./components/pos/ModifierSheet";
-import CustomerBox from "./components/pos/CustomerBox";
+import CustomerRow from "./components/pos/CustomerRow";
+import CustomerPanelOverlay from "./components/customers/CustomerPanelOverlay";
 import CustomerModal from "./components/pos/CustomerModal";
 import { apiLinkCustomerToOrder, apiUnlinkCustomerFromOrder } from "./api/pos/orders";
 
@@ -57,6 +58,7 @@ export function App() {
       .finally(() => setLoading(false));
     return () => ac.abort();
   }, []);
+
 
   const categories = useMemo(() => {
     const base = new Map<string, number>();
@@ -124,6 +126,17 @@ export function App() {
       console.warn("syncLocalStoreFromOrder failed", e);
     }
   }
+
+  // Sync local orders store whenever the active order changes
+  useEffect(() => {
+    if (activeOrder) {
+      try {
+        syncLocalStoreFromOrder(activeOrder);
+      } catch (e) {
+        console.warn("sync from effect failed", e);
+      }
+    }
+  }, [activeOrder]);
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetProduct, setSheetProduct] = useState<{ id: string; name: string; priceCents: number } | null>(null);
@@ -281,34 +294,8 @@ export function App() {
 
           {/* Right column: bon + actions */}
           <aside className="pos-right">
-            {/* Customer box above bon header (always visible) */}
-            <CustomerBox
-              customer={activeOrder?.customer}
-              onOpen={async () => {
-                // Ensure an order exists so CustomerModal mounts
-                try {
-                  if (!activeOrderId) {
-                    const createdId = await ensureActiveOrderCreated();
-                    const ord = await apiGetOrder(createdId);
-                    setActiveOrder(ord);
-                    syncLocalStoreFromOrder(ord);
-                  }
-                } catch (_e) {
-                  // ignore; modal can still open, but ensureActiveOrderCreated should have handled creation
-                }
-                setCustomerModalOpen(true);
-              }}
-              onUnlink={async () => {
-                if (!activeOrderId) return;
-                try {
-                  const updated = await apiUnlinkCustomerFromOrder(activeOrderId);
-                  setActiveOrder(updated);
-                  syncLocalStoreFromOrder(updated);
-                } catch (e) {
-                  setToast("Loskoppelen mislukt");
-                }
-              }}
-            />
+            {/* CustomerRow above bon header (always visible) */}
+            <CustomerRow customer={activeOrder?.customer} />
             <div className="bon-header">
               <div className="bon-header-top">
                 {(() => {
@@ -621,6 +608,24 @@ export function App() {
           }}
         />
       )}
+
+      {/* Fullscreen Customer Panel Overlay (SELECT + CARD) */}
+      <CustomerPanelOverlay
+        orderId={activeOrderId}
+        activeOrderCustomer={activeOrder?.customer}
+        onOrderUpdated={(ord) => {
+          setActiveOrder((prev) => {
+            const merged: OrderDTO = {
+              ...(prev || ord),
+              ...(ord as OrderDTO),
+              customer: (ord as OrderDTO).customer ?? prev?.customer ?? null,
+              lines: (ord as OrderDTO).lines ?? prev?.lines ?? [],
+            } as OrderDTO;
+            console.log("[App] activeOrder.customer after refresh:", merged?.customer);
+            return merged;
+          });
+        }}
+      />
     </div>
   );
 }

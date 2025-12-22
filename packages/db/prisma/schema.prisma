@@ -472,7 +472,7 @@ model Customer {
   @@index([tenantId, createdAt])
   @@index([tenantId, name])
 }
-
+ b
 enum LoyaltyStatus {
   ACTIVE
   INACTIVE
