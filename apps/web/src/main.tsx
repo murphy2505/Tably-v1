@@ -14,6 +14,7 @@ import ProductsPage from "./pages/ProductsPage";
 import AssortimentCategories from "./pages/assortiment/AssortimentCategories";
 import AssortimentCourses from "./pages/AssortimentCourses";
 import AssortimentMenus from "./pages/AssortimentMenus";
+import AssortimentDashboard from "./pages/assortiment/AssortimentDashboard";
 import AssortimentMenuDetail from "./pages/AssortimentMenuDetail";
 import AssortimentRevenueGroups from "./pages/AssortimentRevenueGroups";
 import AssortimentModifiers from "./pages/AssortimentModifiers";
@@ -29,10 +30,13 @@ import Loyalty from "./pages/Loyalty";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import SettingsShell from "./pages/settings/SettingsShell";
+import SettingsHardwareShell from "./pages/settings/SettingsHardwareShell";
 import HardwarePrintersPage from "./pages/settings/HardwarePrintersPage";
-import PrintConfigsPage from "./pages/settings/PrintConfigsPage";
-import PrintRoutesPage from "./pages/settings/PrintRoutesPage";
 import WebshopStatusDemo from "./pages/WebshopStatusDemo";
+import AreasPage from "./pages/AreasPage";
+// Groups removed in favor of Op Naam
+import NameOrdersPage from "./pages/NameOrdersPage";
+// import removed: floorplan editing will live under Areas
 
 const root = createRoot(document.getElementById("root")!);
 
@@ -56,6 +60,9 @@ root.render(
 
             {/* POS flow */}
             <Route path="pos" element={<PosView />} />
+            <Route path="pos/areas" element={<AreasPage />} />
+            {/* groups removed */}
+            <Route path="pos/name-orders" element={<NameOrdersPage />} />
             <Route path="checkout" element={<CheckoutScreen />} />
             <Route path="orders" element={<OrdersPage />} />
             <Route path="kds" element={<KdsScreen />} />
@@ -63,6 +70,7 @@ root.render(
 
             {/* Assortiment */}
             <Route path="assortiment">
+              <Route index element={<AssortimentDashboard />} />
               <Route path="products" element={<ProductsPage />} />
               <Route path="categories" element={<AssortimentCategories />} />
               <Route path="courses" element={<AssortimentCourses />} />
@@ -80,10 +88,16 @@ root.render(
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<SettingsShell />}>
               <Route index element={<Settings />} />
-              <Route path="printers" element={<HardwarePrintersPage />} />
-              <Route path="print-routes" element={<PrintRoutesPage />} />
-              <Route path="print-configs" element={<PrintConfigsPage />} />
+              <Route path="hardware" element={<SettingsHardwareShell />}>
+                <Route path="printers" element={<HardwarePrintersPage />} />
+              </Route>
+              {/* Tables management removed from Settings; use Areas */}
             </Route>
+            {/* Back-compat redirects */}
+            <Route path="settings/printers" element={<Navigate to="/settings/hardware/printers" replace />} />
+            <Route path="settings/floorplan" element={<Navigate to="/pos/areas" replace />} />
+            {/* back-compat for old tables route */}
+            <Route path="pos/tables" element={<Navigate to="/pos/areas" replace />} />
             <Route path="web" element={<WebshopStatusDemo />} />
 
             <Route path="*" element={<Navigate to="/pos" replace />} />

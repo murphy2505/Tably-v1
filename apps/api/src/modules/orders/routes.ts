@@ -218,7 +218,7 @@ ordersRouter.post("/core/orders", asyncHandler(async (req, res) => {
 
   const now = new Date();
   const order = await prisma.$transaction(async (tx) => {
-    const created = await tx.order.create({ data: { tenantId, status: "OPEN" as any, kind: (parsed.data?.kind ?? "QUICK") as any }, include: { lines: true } });
+    const created = await tx.order.create({ data: { tenantId, status: "OPEN" as any, kind: (parsed.data?.kind ?? "QUICK") as any, tableId: (parsed.data?.tableId ?? undefined) as any }, include: { lines: true } });
     const withDraft = await issueDraftNumberTx(tx as any, tenantId, created.id, now);
     return withDraft;
   });
@@ -329,7 +329,7 @@ ordersRouter.get("/core/orders", asyncHandler(async (req, res) => {
     where,
     orderBy: { createdAt: "desc" },
     take: 200,
-    include: { lines: true },
+    include: { lines: true, customer: true },
   });
   return res.json({ orders });
 }));

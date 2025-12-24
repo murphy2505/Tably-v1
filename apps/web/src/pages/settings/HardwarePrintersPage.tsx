@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { hwListPrinters, hwCreatePrinter, hwUpdatePrinter, hwDeletePrinter, hwTestPrinter, type HwPrinter, type Vendor } from "../../api/hardware";
+import { hwListPrinters, hwCreatePrinter, hwUpdatePrinter, hwDeletePrinter, type HwPrinter, type Vendor } from "../../api/hardware";
+import { testCorePrinter, testCorePrinterCut, testCoreDrawer } from "../../api/settings";
 
 function field<T>(v: T | undefined, d: T): T { return (v as any) ?? d; }
 
@@ -59,10 +60,40 @@ export default function HardwarePrintersPage() {
   async function onTest(id: string) {
     try {
       setTestingId(id);
-      await hwTestPrinter(id);
-      setToast("Testbon geprint");
+      await testCorePrinter(id);
+      setToast("Testbon verzonden");
     } catch (e: any) {
-      setToast(e?.message || "Print test mislukt");
+      const msg = e?.response?.data?.error?.message || e?.message || "Printen mislukt";
+      const code = e?.response?.data?.error?.details?.code;
+      setToast(`${msg}${code ? ` (${code})` : ""}`);
+    } finally {
+      setTestingId(null);
+    }
+  }
+
+  async function onTestCut() {
+    try {
+      setTestingId("CUT");
+      await testCorePrinterCut();
+      setToast("Snij-test verzonden");
+    } catch (e: any) {
+      const msg = e?.response?.data?.error?.message || e?.message || "Snij-test mislukt";
+      const code = e?.response?.data?.error?.details?.code;
+      setToast(`${msg}${code ? ` (${code})` : ""}`);
+    } finally {
+      setTestingId(null);
+    }
+  }
+
+  async function onDrawerTest() {
+    try {
+      setTestingId("DRAWER");
+      await testCoreDrawer();
+      setToast("Lade-puls verzonden");
+    } catch (e: any) {
+      const msg = e?.response?.data?.error?.message || e?.message || "Lade-puls mislukt";
+      const code = e?.response?.data?.error?.details?.code;
+      setToast(`${msg}${code ? ` (${code})` : ""}`);
     } finally {
       setTestingId(null);
     }
@@ -70,6 +101,10 @@ export default function HardwarePrintersPage() {
 
   return (
     <div className="settings-grid">
+      <div className="settings-card mint-glass" style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontWeight: 700 }}>Lokaal (LAN)</div>
+        <div style={{ fontSize: 12, opacity: 0.8 }}>Printing werkt alleen binnen 192.168.2.x</div>
+      </div>
       {toast && <div className="toast-fixed">{toast}</div>}
       <div className="settings-card">
         <div className="settings-card-header">
@@ -82,11 +117,16 @@ export default function HardwarePrintersPage() {
           <div className="settings-note">Laden…</div>
         ) : error ? (
           <div className="settings-error">{error}</div>
+        ) : items.length === 0 ? (
+          <div className="settings-note">
+            <div style={{ marginBottom: 8 }}>Geen printers ingesteld voor deze vestiging.</div>
+            <button className="btn primary" onClick={openNew}>Nieuwe printer toevoegen</button>
+          </div>
         ) : (
-          <table className="settings-table">
+          <table className="settings-table mint-glass">
             <thead>
               <tr>
-                <th>Naam</th><th>Host/IP</th><th>Poort</th><th>Vendor</th><th>Papier</th><th>ASCII</th><th>Status</th><th>Acties</th>
+                <th>Naam</th><th>Host/IP</th><th>Poort</th><th>Driver</th><th>Papier</th><th>ASCII</th><th>Status</th><th>Acties</th>
               </tr>
             </thead>
             <tbody>
@@ -95,13 +135,27 @@ export default function HardwarePrintersPage() {
                   <td>{p.name}</td>
                   <td>{p.host}</td>
                   <td>{p.port}</td>
-                  <td>{p.vendor}</td>
+                  <td>{p.vendor === "STAR" ? "Star (ESC/POS TCP)" : p.vendor === "EPSON" ? "Epson (ESC/POS)" : "Generiek (ESC/POS)"}</td>
                   <td>{p.paperWidthMm}</td>
                   <td>{(p.vendor === "EPSON" || p.vendor === "GENERIC_ESCPOS") ? (p.escposAsciiMode ? "Aan" : "Uit") : "—"}</td>
-                  <td>{p.isActive ? "Actief" : "Uit"}</td>
+                  <td>
+                    <label className="toggle-row">
+                      <input type="checkbox" checked={p.isActive} onChange={async (e) => {
+                        try {
+                          const updated = await hwUpdatePrinter(p.id, { isActive: e.target.checked });
+                          setItems((prev) => prev.map((x) => x.id === updated.id ? updated : x));
+                        } catch (err: any) {
+                          setToast(err?.message || "Bijwerken mislukt");
+                        }
+                      }} />
+                      <span>{p.isActive ? "Actief" : "Inactief"}</span>
+                    </label>
+                  </td>
                   <td>
                     <button className="btn" onClick={() => openEdit(p)}>Bewerken</button>
-                    <button className="btn" onClick={() => onTest(p.id)} disabled={testingId != null}>Test</button>
+                    <button className="btn primary" onClick={() => onTest(p.id)} disabled={testingId != null}>{testingId === p.id ? "Testen…" : "Test bon"}</button>
+                    <button className="btn" onClick={onTestCut} disabled={testingId != null}>{testingId === "CUT" ? "Testen…" : "Test cut"}</button>
+                    <button className="btn" onClick={onDrawerTest} disabled={testingId != null}>{testingId === "DRAWER" ? "Testen…" : "Lade test"}</button>
                     <button className="btn danger" onClick={() => onDelete(p.id)}>Verwijderen</button>
                   </td>
                 </tr>

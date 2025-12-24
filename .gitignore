@@ -16,3 +16,7 @@ packages/db/prisma/generated/
 
 # Docker
 postgres-data/
+
+# Local env overrides
+*.env.local
+apps/web/.env.local

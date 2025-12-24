@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useUi } from "../../stores/uiStore";
 import type { OrderDTO } from "../../api/pos/orders";
-import { apiSearchCustomers, type CustomerDTO } from "../../api/loyalty";
+import { apiSearchCustomers, apiCreateCustomer, type CustomerDTO } from "../../api/loyalty";
 import { apiGetOrder, apiLinkCustomerToOrder, apiUnlinkCustomerFromOrder, apiCreateOrder } from "../../api/pos/orders";
 import { usePosSession } from "../../stores/posSessionStore";
 
@@ -44,6 +44,8 @@ export default function CustomerPanelOverlay({ orderId, activeOrderCustomer, onO
   const [results, setResults] = useState<CustomerDTO[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState<{ name: string; phone: string; email: string }>({ name: "", phone: "", email: "" });
 
   useEffect(() => {
     if (!customerPanelOpen) return;
@@ -73,6 +75,35 @@ export default function CustomerPanelOverlay({ orderId, activeOrderCustomer, onO
       setError("Zoeken mislukt");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function createCustomer(linkAfterCreate: boolean) {
+    if (!createForm.name.trim()) { setError("Naam is verplicht"); return; }
+    try {
+      setBusy(true);
+      setError(null);
+      const payload: any = { name: createForm.name.trim() };
+      const ph = createForm.phone.trim();
+      if (ph) {
+        const stripped = ph.replace(/[\s-]/g, "");
+        if (/^06\d{7}$/.test(stripped)) payload.phoneE164 = "+31" + stripped.slice(1);
+        else if (/^\+\d{6,}$/.test(stripped)) payload.phoneE164 = stripped;
+      }
+      const em = createForm.email.trim();
+      if (em) payload.email = em;
+      const created = await apiCreateCustomer(payload);
+      // Add to top of results and optionally link to order
+      setResults((prev) => [created, ...prev]);
+      if (linkAfterCreate) {
+        await link(created.id);
+      }
+      setCreating(false);
+      setCreateForm({ name: "", phone: "", email: "" });
+    } catch (e) {
+      setError("Aanmaken mislukt");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -210,10 +241,33 @@ export default function CustomerPanelOverlay({ orderId, activeOrderCustomer, onO
               ))}
             </div>
           )}
-
-          {/* Optional: New customer placeholder */}
-          <div style={{ marginTop: 8 }}>
-            <button className="btn" disabled>Nieuwe klant (binnenkort)</button>
+          <div className="cust-section" style={{ marginTop: 8 }}>
+            {!creating ? (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontWeight: 800 }}>Nieuwe klant</div>
+                <button className="btn" onClick={() => setCreating(true)}>Toevoegen</button>
+              </div>
+            ) : (
+              <div className="settings-form" style={{ display: "grid", gap: 8 }}>
+                <label>
+                  <span>Naam</span>
+                  <input value={createForm.name} onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))} />
+                </label>
+                <label>
+                  <span>Telefoon</span>
+                  <input value={createForm.phone} onChange={(e) => setCreateForm((f) => ({ ...f, phone: e.target.value }))} placeholder="06… of +31…" />
+                </label>
+                <label>
+                  <span>Email</span>
+                  <input value={createForm.email} onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))} />
+                </label>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <button className="btn" onClick={() => { setCreating(false); setCreateForm({ name: "", phone: "", email: "" }); }} disabled={busy}>Annuleren</button>
+                  <button className="btn" onClick={() => createCustomer(false)} disabled={busy || !createForm.name.trim()}>Aanmaken</button>
+                  <button className="btn primary" onClick={() => createCustomer(true)} disabled={busy || !createForm.name.trim()}>Aanmaken & koppelen</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

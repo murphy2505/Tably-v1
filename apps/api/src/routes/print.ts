@@ -60,11 +60,8 @@ router.post("/test", async (req, res) => {
   try {
     const tenantId = getTenantIdFromRequest(req);
     const printer = await resolvePrinterForKind(tenantId, "RECEIPT");
-    if (String(printer.driver).startsWith("STAR")) {
-      await printStarTestReceipt(tenantId);
-    } else {
-      await printTest(printer as any);
-    }
+    // Route all drivers via unified raw ESC/POS TCP test for reliability
+    await printTest(printer as any);
     res.json({ ok: true });
   } catch (e: any) {
     console.error("[print.test] error", e);

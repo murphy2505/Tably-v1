@@ -65,7 +65,7 @@ export default function OrdersPage() {
         receiptIssuedAt: (o as any).receiptIssuedAt ?? null,
         draftLabel: (o as any).draftLabel ?? null,
         draftNo: (o as any).draftNo ?? null,
-        customerName: null,
+        customerName: (o as any).customer?.name || (o as any).customer?.phoneE164 || null,
         // include kind for filtering if present
         kind: (o as any).kind ?? "QUICK",
       }));
@@ -143,6 +143,16 @@ export default function OrdersPage() {
     if (k === "completed") return "status-chip status-chip--completed";
     return "status-chip";
   }
+  function statusText(s: string) {
+    const k = s.toUpperCase();
+    if (k === "OPEN") return "Open";
+    if (k === "SENT" || k === "IN_PREP") return "Bezig";
+    if (k === "READY") return "Gereed";
+    if (k === "PAID") return "Betaald";
+    if (k === "CANCELLED" || k === "VOIDED") return "Geannuleerd";
+    if (k === "COMPLETED") return "Afgerond";
+    return s;
+  }
 
   return (
     <div className="orders-layout">
@@ -202,7 +212,8 @@ export default function OrdersPage() {
               </div>
               <div className="order-row-right">
                 <div className="order-row-total">{formatEuro(o.totalInclVatCents)}</div>
-                <span className={statusClass(o.status)}>{o.status}</span>
+                {o.customerName && <div style={{ color: "#6b7280", fontSize: 12 }}>{o.customerName}</div>}
+                <span className={statusClass(o.status)}>{statusText(o.status)}</span>
                 <button
                   className="btn"
                   disabled={actingId === o.id}

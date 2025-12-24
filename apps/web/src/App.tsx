@@ -13,6 +13,7 @@ import CustomerRow from "./components/pos/CustomerRow";
 import CustomerPanelOverlay from "./components/customers/CustomerPanelOverlay";
 import CustomerModal from "./components/pos/CustomerModal";
 import { apiLinkCustomerToOrder, apiUnlinkCustomerFromOrder } from "./api/pos/orders";
+import { LogOut } from "lucide-react";
 
 function formatEuro(cents: number): string {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -221,18 +222,49 @@ export function App() {
 
   const statusClass = loading ? "loading" : error ? "error" : "ready";
   const statusLabel = loading ? "Loading" : error ? "Error" : "Ready";
+  function statusColor(cls: string): string {
+    if (cls === "ready") return "#10b981"; // green
+    if (cls === "loading") return "#f59e0b"; // amber
+    if (cls === "error") return "#ef4444"; // red
+    return "#9ca3af"; // fallback gray
+  }
+  const [pulseOn, setPulseOn] = useState(false);
+  useEffect(() => {
+    const t = setInterval(() => setPulseOn((v) => !v), 1200);
+    return () => clearInterval(t);
+  }, []);
+  const userName = (typeof window !== "undefined" && (window.localStorage.getItem("userName") || "Medewerker")) as string;
 
   return (
     <div className={`app light ${compact ? "compact" : ""}`}>
       <header className="topbar light">
         <div className="topbar-left">Tably POS</div>
         <div className="topbar-center">{menu?.name ?? "—"}</div>
-        <div className="topbar-right">
-          <div className={`status-pill ${statusClass}`}>{statusLabel}</div>
-          <label className="compact-toggle">
-            <input type="checkbox" checked={compact} onChange={() => setCompact((v) => !v)} />
-            <span>Compact</span>
-          </label>
+        <div className="topbar-right" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: "#111827", fontWeight: 600 }}>{userName}</span>
+          <button
+            className="btn"
+            aria-label="Afmelden"
+            title="Afmelden"
+            onClick={() => { try { window.localStorage.clear(); } catch {} window.location.reload(); }}
+            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff" }}
+          >
+            <LogOut size={16} strokeWidth={1.75} />
+          </button>
+          <span
+            aria-label={statusLabel}
+            title={statusLabel}
+            style={{
+              width: 12,
+              height: 12,
+              borderRadius: 999,
+              background: statusColor(statusClass),
+              border: "1px solid #e5e7eb",
+              display: "inline-block",
+              boxShadow: statusClass === "ready" && pulseOn ? "0 0 0 6px rgba(16,185,129,0.12)" : "none",
+              transition: "box-shadow 0.6s ease",
+            }}
+          />
         </div>
       </header>
 
@@ -406,11 +438,25 @@ export function App() {
                 </button>
                 <button className="btn danger" onClick={() => setBreakOpen(true)}>Breek af</button>
                 <button
+                  className="btn"
+                  onClick={async () => {
+                    try {
+                      const id = await ensureActiveOrderCreated();
+                      setCustomerModalOpen(true);
+                    } catch (_e) {
+                      setCustomerModalOpen(true);
+                    }
+                  }}
+                  disabled={!activeOrder}
+                >
+                  Boek op naam
+                </button>
+                <button
                   className="btn success"
                   onClick={() => activeOrderId && navigate("/checkout", { state: { orderId: activeOrderId } })}
                   disabled={!activeOrder || (activeOrder.lines ?? []).length === 0}
                 >
-                  Betaal
+                  Uitchecken
                 </button>
               </div>
             </div>
@@ -539,29 +585,14 @@ export function App() {
           Bestellingen
         </button>
 
-        {/* Always works: open customer modal */}
-        <button
-          className="bar-btn"
-          onClick={async () => {
-            // Ensure an order exists when linking; opening modal is allowed regardless
-            try {
-              if (!activeOrderId) {
-                const createdId = await ensureActiveOrderCreated();
-                // hydrate activeOrder for immediate banner updates
-                const ord = await apiGetOrder(createdId);
-                setActiveOrder(ord);
-                syncLocalStoreFromOrder(ord);
-              }
-            } catch (e) {
-              // still open; linking action will create if needed
-            }
-            setCustomerModalOpen(true);
-          }}
-        >
-          Klant
-        </button>
+        {/* Op naam: navigeer naar lijst met opgeslagen (op-naam) bonnen */}
+        <button className="bar-btn" onClick={() => navigate("/pos/name-orders")}>Op Naam</button>
 
         <LastReceiptTrigger variant="bottombar" />
+
+        <button className="bar-btn" onClick={() => navigate("/pos/areas")}>
+          Gebieden
+        </button>
 
         <button className="bar-btn" onClick={() => navigate("/kds")}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>

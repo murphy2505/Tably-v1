@@ -75,6 +75,11 @@ model Tenant {
 
   // Settings
   settings TenantSettings?
+
+  // Tables & bookings
+  tables    Table[]
+  groups    Group[]
+  floorplan Floorplan?
 }
 
 model RevenueGroup {
@@ -429,6 +434,12 @@ model Order {
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
+  // Booking (MVP): mutually exclusive associations
+  tableId String?
+  table   Table?   @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  groupId String?
+  group   Group?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
   // Totals (computed backend-side, cents)
   subtotalExclVatCents Int  @default(0)
   totalInclVatCents    Int  @default(0)
@@ -444,6 +455,8 @@ model Order {
   // Indexes
   @@index([tenantId, status])
   @@index([tenantId, customerId])
+  @@index([tenantId, tableId])
+  @@index([tenantId, groupId])
   @@index([updatedAt])
 }
 
@@ -472,7 +485,6 @@ model Customer {
   @@index([tenantId, createdAt])
   @@index([tenantId, name])
 }
- b
 enum LoyaltyStatus {
   ACTIVE
   INACTIVE
@@ -658,4 +670,51 @@ model PrintConfig {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, isActive])
+}
+
+// =========================
+// Tables, Groups, Floorplan (tenant-scoped)
+// =========================
+
+model Table {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  capacity  Int?
+  sortIndex Int      @default(0)
+  area      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, sortIndex])
+}
+
+model Group {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, name])
+}
+
+model Floorplan {
+  id         String   @id @default(cuid())
+  tenantId   String   @unique
+  name       String   @default("Standaard")
+  layoutJson Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }

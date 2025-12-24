@@ -1,4 +1,6 @@
 import express, { Request, Response, NextFunction } from "express";
+import fs from "node:fs";
+import path from "node:path";
 import cors, { CorsOptions } from "cors";
 import { getTenantIdFromRequest } from "./tenant";
 import { catalogRouter } from "./modules/catalog/routes";
@@ -17,6 +19,7 @@ import { ensureTenant } from "./ensureTenant";
 import hardwareRouter from "./modules/hardware/routes";
 import sumupRouter from "./modules/payments/sumupRoutes";
 import { loyaltyCustomersRouter } from "./modules/loyalty/routes";
+import { posRouter } from "./modules/pos/routes";
 
 export function createServer() {
   const app = express();
@@ -61,13 +64,26 @@ export function createServer() {
   app.use(cors(corsOptions));
   app.use(express.json());
 
-  // Health endpoints (minimal)
-  app.get("/health", (_req: Request, res: Response) => {
-    res.json({ data: { ok: true, service: "api", time: new Date().toISOString() } });
-  });
-  app.get("/api/health", (_req: Request, res: Response) => {
-    res.json({ data: { ok: true, service: "api", time: new Date().toISOString() } });
-  });
+  // Health endpoints with env + version
+  const pkgPath = path.resolve(__dirname, "../package.json");
+  let version = "0.0.0";
+  try {
+    const pkgRaw = fs.readFileSync(pkgPath, "utf8");
+    version = JSON.parse(pkgRaw)?.version || version;
+  } catch {}
+  const health = (_req: Request, res: Response) => {
+    res.json({
+      ok: true,
+      env: {
+        nodeEnv: process.env.NODE_ENV || "development",
+        host: process.env.HOST || "0.0.0.0",
+        port,
+      },
+      version,
+    });
+  };
+  app.get("/health", health);
+  app.get("/api/health", health);
   // Dev-only: tenant summary endpoint to aid debugging
   if (process.env.NODE_ENV !== "production") {
     app.get("/api/debug/tenant-summary", async (_req: Request, res: Response) => {
@@ -114,10 +130,20 @@ export function createServer() {
   app.use("/", settingsRouter);
   app.use("/", ordersRouter);
   // Primary mounts under /api
+  app.use("/api", settingsRouter);
   app.use("/api/hardware", hardwareRouter);
   app.use("/api/print", printRouter);
   app.use("/api/payments/sumup", sumupRouter);
   app.use("/api/loyalty", loyaltyCustomersRouter);
+  app.use("/api", posRouter);
+  // Add core routers under /api to support axios baseURL '/api'
+  app.use("/api/core/catalog", catalogRouter);
+  app.use("/api/core/menu", menuRouter);
+  app.use("/api", modifiersRouter);
+  app.use("/api", menuCardsRouter);
+  app.use("/api", webshopRouter);
+  app.use("/api", ordersRouter);
+  app.use("/", posRouter);
 
   // Backwards compatibility mounts (temporary)
   app.use("/hardware", hardwareRouter);

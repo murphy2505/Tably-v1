@@ -1,7 +1,10 @@
 import axios from "axios";
 
+// Compute API origin for Local-Only LAN development
+export const API_ORIGIN: string | null = (import.meta as any).env?.VITE_API_ORIGIN || null;
+
 const http = axios.create({
-  baseURL: "/api",
+  baseURL: API_ORIGIN ? `${API_ORIGIN.replace(/\/$/, "")}/api` : "/api",
   withCredentials: true,
 });
 

@@ -72,6 +72,21 @@ export async function testPrint(payload?: { host?: string; port?: number }): Pro
   await http.post("/print/test-escpos", payload ?? {});
 }
 
+export async function testCorePrinter(printerId?: string): Promise<{ ok: true } | never> {
+  const res = await http.post<{ ok: true }>("/core/printers/test", printerId ? { printerId } : {});
+  return res.data;
+}
+
+export async function testCorePrinterCut(): Promise<{ ok: true } | never> {
+  const res = await http.post<{ ok: true }>("/core/printers/test-cut", {});
+  return res.data;
+}
+
+export async function testCoreDrawer(): Promise<{ ok: true } | never> {
+  const res = await http.post<{ ok: true }>("/core/printers/drawer/test", {});
+  return res.data;
+}
+
 // POS settings (auto-print after payment)
 export type PosSettingsDTO = { autoPrintReceiptAfterPayment: boolean };
 

@@ -24,7 +24,25 @@ export const hardwareRouter = Router();
 hardwareRouter.get("/printers", async (req, res) => {
   try {
     const tenantId = getTenantIdFromRequest(req);
-    const printers = await prisma.printer.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } });
+    let printers = await prisma.printer.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } });
+    // Seed a minimal default printer when none exist
+    if (printers.length === 0) {
+      try {
+        const created = await prisma.printer.create({
+          data: {
+            tenantId,
+            name: "Bonprinter",
+            driver: "ESC_POS_TCP" as any,
+            host: "127.0.0.1",
+            port: 9100,
+            paperWidth: 80,
+            escposAsciiMode: true,
+            isActive: false,
+          },
+        });
+        printers = [created];
+      } catch {}
+    }
     const data = printers.map((p) => ({
       id: p.id,
       tenantId: p.tenantId,

@@ -52,7 +52,7 @@ export default function AppShell() {
             return (
               <div key={item.path}>
                 <NavLink
-                  to={item.path === "/assortiment" ? "/assortiment/products" : item.path}
+                  to={item.path}
                   className={() => `rail-item ${active ? "rail-active" : ""}`}
                 >
                   <span className="rail-icon" aria-hidden>

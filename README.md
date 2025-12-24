@@ -2,6 +2,84 @@
 
 Single-tenant backbone using DEFAULT_TENANT_ID. Monorepo with API and DB.
 
+## Local LAN Dev (iPad on same Wi‑Fi)
+
+Goal: Run API locally on your MacBook and access it from your iPad via LAN, so printers on 192.168.x.x work reliably.
+
+1) Start Postgres and prepare DB
+
+```bash
+npm install
+npm run db:up
+npm run prisma:generate
+npm run db:migrate
+npm run db:seed
+```
+
+2) Start API on port 4002, bound to 0.0.0.0
+
+```bash
+npm -w apps/api run dev
+```
+
+3) Verify API health from your iPad’s perspective (replace with your Mac’s LAN IP)
+
+```bash
+curl -i http://192.168.2.12:4002/health
+```
+
+Expect: HTTP 200 and JSON like `{ ok: true, env, version }`.
+
+4) Configure the web app to call the local API over LAN
+
+Edit `apps/web/.env.local` (example):
+
+```dotenv
+VITE_API_ORIGIN=http://192.168.2.12:4002
+VITE_DEFAULT_TENANT_ID="cafetaria-centrum"
+```
+
+5) Start the web app on LAN (Vite exposes on your IP)
+
+```bash
+npm -w apps/web run dev
+```
+
+Open on iPad: `http://192.168.2.12:5173`.
+
+6) Confirm the web uses the local API
+
+- In Settings, a small “Lokaal (LAN) — API: 192.168.2.12:4002” badge is shown.
+- Or use your browser devtools Network tab to confirm requests go to `http://192.168.2.12:4002/api/...`.
+
+7) Printer test (tenant: cafetaria-centrum)
+
+```bash
+curl -i -X POST \
+  http://192.168.2.12:4002/api/core/printers/test \
+  -H 'x-tenant-id: cafetaria-centrum' \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
+
+If printers are not configured yet, the API seeds two defaults for this tenant:
+- Star: `192.168.2.13:9100` (active)
+- Epson: `192.168.2.168:9100` (inactive)
+
+If the print fails, the API logs the exact connect target and error code.
+
+### Grep checklist: ensure no VPS/UltaHost URLs remain
+
+```bash
+# Search for old VPS IP or hostnames in web config
+grep -R "82.41.181.126\|ultahost\|srv026909285" -n apps/web || true
+
+# Search for accidental 127.0.0.1:4002 hardcoding outside allowed fallbacks
+grep -R "127.0.0.1:4002" -n apps/web || true
+```
+
+The web now uses `VITE_API_ORIGIN` exclusively for deciding the API URL at runtime and in the dev proxy.
+
 ## Setup
 
 ```bash
