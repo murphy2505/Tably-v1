@@ -21,7 +21,8 @@ import AssortimentModifiers from "./pages/AssortimentModifiers";
 
 /* Core screens */
 import CheckoutScreen from "./pages/CheckoutScreen";
-import OrdersPage from "./pages/OrdersPage";
+import OrdersDashboard from "./pages/orders/OrdersDashboard";
+import OrderDetailView from "./pages/orders/OrderDetailView";
 import DayJournalPage from "./pages/DayJournalPage";
 import KdsScreen from "./pages/KdsScreen";
 
@@ -33,9 +34,9 @@ import SettingsShell from "./pages/settings/SettingsShell";
 import SettingsHardwareShell from "./pages/settings/SettingsHardwareShell";
 import HardwarePrintersPage from "./pages/settings/HardwarePrintersPage";
 import WebshopStatusDemo from "./pages/WebshopStatusDemo";
-import AreasPage from "./pages/AreasPage";
+import FloorplanPage from "./pages/floor/FloorplanPage";
 // Groups removed in favor of Op Naam
-import NameOrdersPage from "./pages/NameOrdersPage";
+import CustomersPage from "./pages/customers/CustomersPage";
 // import removed: floorplan editing will live under Areas
 
 const root = createRoot(document.getElementById("root")!);
@@ -60,11 +61,23 @@ root.render(
 
             {/* POS flow */}
             <Route path="pos" element={<PosView />} />
-            <Route path="pos/areas" element={<AreasPage />} />
-            {/* groups removed */}
-            <Route path="pos/name-orders" element={<NameOrdersPage />} />
+            {/* Single source of truth for floorplan */}
+            <Route path="tables" element={<FloorplanPage />} />
+            {/* Legacy redirects */}
+            <Route path="pos/areas" element={<Navigate to="/tables" replace />} />
+            <Route path="pos/areas/tables" element={<Navigate to="/tables" replace />} />
+            <Route path="gebieden" element={<Navigate to="/tables" replace />} />
+            <Route path="gebieden/tafels" element={<Navigate to="/tables" replace />} />
+            {/* Top-level alias for Floorplan: /tables */}
+            <Route path="tables" element={<FloorplanPage />} />
+            {/* Legacy Op-naam route → redirect to Customers */}
+            <Route path="pos/name-orders" element={<Navigate to="/customers" replace />} />
+            <Route path="customers" element={<CustomersPage />} />
             <Route path="checkout" element={<CheckoutScreen />} />
-            <Route path="orders" element={<OrdersPage />} />
+            <Route path="orders">
+              <Route index element={<OrdersDashboard />} />
+              <Route path=":id" element={<OrderDetailView />} />
+            </Route>
             <Route path="kds" element={<KdsScreen />} />
             <Route path="day-journal" element={<DayJournalPage />} />
 
@@ -97,7 +110,7 @@ root.render(
             <Route path="settings/printers" element={<Navigate to="/settings/hardware/printers" replace />} />
             <Route path="settings/floorplan" element={<Navigate to="/pos/areas" replace />} />
             {/* back-compat for old tables route */}
-            <Route path="pos/tables" element={<Navigate to="/pos/areas" replace />} />
+            <Route path="pos/tables" element={<Navigate to="/tables" replace />} />
             <Route path="web" element={<WebshopStatusDemo />} />
 
             <Route path="*" element={<Navigate to="/pos" replace />} />

@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ShoppingCart, ClipboardList, Monitor, CalendarCheck, BarChart3, Settings, Package, Gift, Utensils, Tags, Layers, Wallet, Sliders, Users, UserCircle, Printer, Wrench } from "lucide-react";
+import { ShoppingCart, ClipboardList, Monitor, CalendarCheck, BarChart3, Settings, Package, Gift, Utensils, Tags, Layers, Wallet, Sliders, UserCircle, Wrench } from "lucide-react";
 
 export type NavItem = {
   path: string;
@@ -12,8 +12,8 @@ export type NavItem = {
 export const NAV: NavItem[] = [
   { path: "/pos", label: "POS", icon: ShoppingCart },
   { path: "/orders", label: "Bestellingen", icon: ClipboardList },
-  { path: "/pos/areas", label: "Gebieden", icon: Layers },
-  { path: "/pos/name-orders", label: "Op Naam", icon: UserCircle },
+  { path: "/tables", label: "Tafels", icon: ClipboardList },
+  { path: "/customers", label: "Op naam", icon: UserCircle },
   { path: "/kds", label: "KDS", icon: Monitor },
   {
     path: "/assortiment",

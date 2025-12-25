@@ -359,6 +359,35 @@ ordersRouter.get("/core/orders/:id", asyncHandler(async (req, res) => {
   return res.json({ order });
 }));
 
+// Update order context (orderType, tableId, customerId, note, pickupAt)
+ordersRouter.put("/core/orders/:id", asyncHandler(async (req, res) => {
+  const tenantId = getTenantIdFromRequest(req);
+  if (!tenantId) return res.status(400).json({ error: { message: "TENANT_REQUIRED" } });
+  const id = String(req.params.id);
+  const existing = await prisma.order.findFirst({ where: { id, tenantId } });
+  if (!existing) return notFound(res);
+
+  const Body = z.object({
+    orderType: z.string().optional(),
+    tableId: z.string().nullable().optional(),
+    customerId: z.string().nullable().optional(),
+    pickupAt: z.string().nullable().optional(),
+    note: z.string().nullable().optional(),
+  });
+  const parsed = Body.safeParse(req.body);
+  if (!parsed.success) return validationError(res, parsed.error.issues);
+
+  const patch: any = {};
+  if (parsed.data.orderType !== undefined) patch.orderType = parsed.data.orderType;
+  if (parsed.data.tableId !== undefined) patch.tableId = parsed.data.tableId as any;
+  if (parsed.data.customerId !== undefined) patch.customerId = parsed.data.customerId as any;
+  if (parsed.data.pickupAt !== undefined) patch.pickupAt = parsed.data.pickupAt as any;
+  if (parsed.data.note !== undefined) patch.note = parsed.data.note as any;
+
+  const updated = await prisma.order.update({ where: { id }, data: patch, include: { lines: true, customer: true, table: { select: { id: true, name: true } } } });
+  return res.json({ order: updated });
+}));
+
 // KDS: SSE stream (accepts header x-tenant-id or query tenantId for EventSource compatibility)
 ordersRouter.get("/core/kds/stream", asyncHandler(async (req, res) => {
   const headerTenant = req.header("x-tenant-id");

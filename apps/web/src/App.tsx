@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useOrders, type OrderLine } from "./stores/ordersStore";
-import { apiCreateOrder, apiAddOrderLine, apiGetOrder, apiTransitionOrder, apiDeleteOrder, apiVoidOrder, apiParkOrder, apiCancelOrder, type OrderDTO } from "./api/pos/orders";
+import { apiCreateOrder, apiAddOrderLine, apiGetOrder, apiTransitionOrder, apiDeleteOrder, apiVoidOrder, apiParkOrder, apiCancelOrder, type OrderDTO, apiLinkCustomerToOrder, apiUpdateOrder } from "./api/pos/orders";
 import { usePosSession } from "./stores/posSessionStore";
 import LastReceiptTrigger from "./components/LastReceiptTrigger";
 import { fetchActivePosMenu } from "./api/pos";
@@ -11,8 +11,11 @@ import { apiGetProductModifierGroups } from "./api/pos/modifiers";
 import ModifierSheet from "./components/pos/ModifierSheet";
 import CustomerRow from "./components/pos/CustomerRow";
 import CustomerPanelOverlay from "./components/customers/CustomerPanelOverlay";
+import MoreActionsSheet from "./components/ui/MoreActionsSheet";
 import CustomerModal from "./components/pos/CustomerModal";
-import { apiLinkCustomerToOrder, apiUnlinkCustomerFromOrder } from "./api/pos/orders";
+import { type DraftOrderContext } from "./components/pos/OrderContextChip";
+import BoekenSheet from "./components/pos/BoekenSheet";
+import { apiBookOrder } from "./api/pos/tables";
 import { LogOut } from "lucide-react";
 
 function formatEuro(cents: number): string {
@@ -26,6 +29,7 @@ function categoryLabelFromItem(item: PosMenuDTO["items"][number]): string {
 
 export function App() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [menu, setMenu] = useState<PosMenuDTO | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,10 +97,14 @@ export function App() {
 
   const { activeOrderId, setActiveOrderId, clearActiveOrder } = usePosSession();
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
+  const [bookingIntent, setBookingIntent] = useState(false);
+  const [boekenOpen, setBoekenOpen] = useState(false);
+  const [draftContext, setDraftContext] = useState<DraftOrderContext>({ orderType: "WALKIN" });
   const [activeOrder, setActiveOrder] = useState<OrderDTO | null>(null);
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [breakOpen, setBreakOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [breakSubmitting, setBreakSubmitting] = useState(false);
   const [breakReason, setBreakReason] = useState("");
   const [breakLabel, setBreakLabel] = useState("");
@@ -143,6 +151,7 @@ export function App() {
   const [sheetProduct, setSheetProduct] = useState<{ id: string; name: string; priceCents: number } | null>(null);
   const [sheetMenuItemId, setSheetMenuItemId] = useState<string | null>(null);
   const [sheetGroups, setSheetGroups] = useState<Array<{ id: string; name: string; minSelect: number; maxSelect: number; options: { id: string; name: string; priceDeltaCents: number }[] }>>([]);
+  const inflightCreateRef = useRef<Promise<string> | null>(null);
 
   async function ensureActiveOrderCreated(): Promise<string> {
     // Create a backend order only when needed, mirror locally
@@ -153,6 +162,26 @@ export function App() {
     setActiveOrder(created);
     syncLocalStoreFromOrder(created);
     return created.id;
+  }
+
+  async function ensureRealOrderIfNeeded(reason: string): Promise<string> {
+    if (activeOrderId) return activeOrderId;
+    if (inflightCreateRef.current) return inflightCreateRef.current;
+    const p = (async () => {
+      const id = await ensureActiveOrderCreated();
+      try {
+        if ((draftContext as any).tableId) {
+          await apiBookOrder(id, { type: "TABLE", tableId: (draftContext as any).tableId });
+        } else if (draftContext.orderType === "TAKEAWAY") {
+          await apiUpdateOrder(id, { orderType: "TAKEAWAY" });
+        }
+      } catch {}
+      return id;
+    })();
+    inflightCreateRef.current = p;
+    const id = await p;
+    inflightCreateRef.current = null;
+    return id;
   }
 
   async function addItemToOrder(item: PosMenuDTO["items"][number]) {
@@ -183,8 +212,8 @@ export function App() {
       } catch (_e) {
         // ignore; proceed to add without modifiers
       }
-      // No modifiers: create on first tap if missing, then add
-      const targetOrderId = await ensureActiveOrderCreated();
+      // No modifiers: create on first tap if needed, then add
+      const targetOrderId = await ensureRealOrderIfNeeded("LINE_ADDED");
       const updated = await apiAddOrderLine(targetOrderId, pid, 1, undefined, item.id);
       setActiveOrder(updated);
       syncLocalStoreFromOrder(updated);
@@ -220,6 +249,41 @@ export function App() {
     return () => { cancelled = true; };
   }, [activeOrderId]);
 
+  // Handle picker return via URL params
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const pickForOrder = params.get("pickForOrder");
+    const pickedTableId = params.get("pickedTableId");
+    const pickedCustomerId = params.get("pickedCustomerId");
+    if (!pickForOrder || (!pickedTableId && !pickedCustomerId)) return;
+    (async () => {
+      const id = await ensureRealOrderIfNeeded(pickedTableId ? "BOOK_TABLE" : "BOOK_CUSTOMER");
+      try {
+        if (pickedTableId) {
+          const currentTableId = (activeOrder as any)?.tableId || (activeOrder as any)?.table?.id || null;
+          if (currentTableId !== pickedTableId) {
+            const updated = await apiBookOrder(id, { type: "TABLE", tableId: pickedTableId });
+            setActiveOrder(updated);
+            syncLocalStoreFromOrder(updated);
+          }
+        }
+        if (pickedCustomerId) {
+          if (!activeOrder?.customer || activeOrder.customer.id !== pickedCustomerId) {
+            const updated = await apiLinkCustomerToOrder(id, pickedCustomerId);
+            setActiveOrder(updated);
+            syncLocalStoreFromOrder(updated);
+          }
+        }
+      } catch (e) {
+        console.warn("persist booking failed", e);
+      }
+      // Clear any POS query params before navigating to order detail
+      navigate("/pos", { replace: true });
+      navigate(`/orders/${id}`);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   const statusClass = loading ? "loading" : error ? "error" : "ready";
   const statusLabel = loading ? "Loading" : error ? "Error" : "Ready";
   function statusColor(cls: string): string {
@@ -242,6 +306,7 @@ export function App() {
         <div className="topbar-center">{menu?.name ?? "—"}</div>
         <div className="topbar-right" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <span style={{ color: "#111827", fontWeight: 600 }}>{userName}</span>
+          {/* Header context chip removed per spec */}
           <button
             className="btn"
             aria-label="Afmelden"
@@ -398,66 +463,25 @@ export function App() {
 
             <div className="actions">
               <div className="action-buttons">
-                {activeOrder && activeOrder.status === "OPEN" && (
-                  <button
-                    className="btn primary"
-                    onClick={async () => {
-                      if (!activeOrderId) return;
-                      try {
-                        setSending(true);
-                        await apiTransitionOrder(activeOrderId, "SENT");
-                        clearActiveOrder();
-                        setActiveOrder(null);
-                        // refresh KDS badge count optimistically
-                        refreshCounts(true);
-                      } catch (e) {
-                        console.warn("send to kitchen failed", e);
-                        setToast("Verzenden naar keuken mislukt");
-                      } finally {
-                        setSending(false);
-                      }
-                    }}
-                    disabled={sending}
-                  >
-                    Naar keuken
-                  </button>
-                )}
-                <button
-                  className="btn"
-                  onClick={() => {
-                    // Lazy-create: do not create immediately; just clear current context
-                    clearActiveOrder();
-                    setActiveOrder(null);
-                    clearCurrentOrder();
-                  }}
-                >
-                  Nieuwe bon
-                </button>
-                <button className="btn" onClick={() => { clearActiveOrder(); setActiveOrder(null); }}>
-                  Hold
-                </button>
-                <button className="btn danger" onClick={() => setBreakOpen(true)}>Breek af</button>
-                <button
-                  className="btn"
-                  onClick={async () => {
-                    try {
-                      const id = await ensureActiveOrderCreated();
-                      setCustomerModalOpen(true);
-                    } catch (_e) {
-                      setCustomerModalOpen(true);
-                    }
-                  }}
-                  disabled={!activeOrder}
-                >
-                  Boek op naam
-                </button>
-                <button
-                  className="btn success"
-                  onClick={() => activeOrderId && navigate("/checkout", { state: { orderId: activeOrderId } })}
-                  disabled={!activeOrder || (activeOrder.lines ?? []).length === 0}
-                >
-                  Uitchecken
-                </button>
+                {/* 2026: ultra-simple action bar */}
+                {(() => {
+                  const showBookAction = !!activeOrder && (((activeOrder as any)?.table) || !!activeOrder?.customer);
+                  return (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className="btn danger" onClick={() => setBreakOpen(true)}>Breek af</button>
+                      {showBookAction && (
+                        <button className="btn" onClick={() => setBoekenOpen(true)}>Boeken</button>
+                      )}
+                      <button
+                        className="btn success"
+                        onClick={() => activeOrderId && navigate("/checkout", { state: { orderId: activeOrderId } })}
+                        disabled={!activeOrder || (activeOrder.lines ?? []).length === 0}
+                      >
+                        Uitchecken
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </aside>
@@ -581,18 +605,116 @@ export function App() {
         >
           Hold
         </button>
-        <button className="bar-btn" onClick={() => navigate("/orders")}>
+        <button
+          className="bar-btn"
+          onClick={async () => {
+            try {
+              // discard empty unbooked OPEN orders when leaving POS
+              if (
+                activeOrderId &&
+                activeOrder &&
+                (activeOrder.lines?.length || 0) === 0 &&
+                !(activeOrder as any).tableId && !(activeOrder as any).table &&
+                !activeOrder.customer &&
+                (activeOrder.status || "OPEN") === "OPEN"
+              ) {
+                await apiDeleteOrder(activeOrderId);
+                clearActiveOrder();
+                setActiveOrder(null);
+                clearCurrentOrder();
+              }
+            } catch {}
+            navigate("/orders");
+          }}
+        >
           Bestellingen
         </button>
 
-        {/* Op naam: navigeer naar lijst met opgeslagen (op-naam) bonnen */}
-        <button className="bar-btn" onClick={() => navigate("/pos/name-orders")}>Op Naam</button>
+        {/* Klant: pick for order when applicable */}
+        <button
+          className="bar-btn"
+          onClick={async () => {
+            const shouldPick = !!activeOrderId; // pick into active order if present
+            if (shouldPick) {
+              navigate(`/customers?pickForOrder=active&returnTo=/pos`);
+              return;
+            }
+            // No active order: only go to pick mode if draft isn't an empty WALKIN
+            const isEmptyWalkinDraft = !activeOrderId && draftContext.orderType === "WALKIN" && !(draftContext as any).tableId;
+            if (isEmptyWalkinDraft) {
+              // Normal mode
+              try {
+                if (
+                  activeOrderId &&
+                  activeOrder &&
+                  (activeOrder.lines?.length || 0) === 0 &&
+                  !(activeOrder as any).tableId && !(activeOrder as any).table &&
+                  !activeOrder.customer &&
+                  (activeOrder.status || "OPEN") === "OPEN"
+                ) {
+                  await apiDeleteOrder(activeOrderId);
+                  clearActiveOrder();
+                  setActiveOrder(null);
+                  clearCurrentOrder();
+                }
+              } catch {}
+              navigate("/customers");
+            } else {
+              navigate(`/customers?pickForOrder=draft&returnTo=/pos`);
+            }
+          }}
+        >Klant</button>
 
         <LastReceiptTrigger variant="bottombar" />
 
-        <button className="bar-btn" onClick={() => navigate("/pos/areas")}>
-          Gebieden
+        <button
+          className="bar-btn"
+          onClick={async () => {
+            const shouldPick = !!activeOrderId;
+            if (shouldPick) {
+              navigate(`/tables?pickForOrder=active&returnTo=/pos`);
+              return;
+            }
+            const isEmptyWalkinDraft = !activeOrderId && draftContext.orderType === "WALKIN" && !(draftContext as any).tableId;
+            if (isEmptyWalkinDraft) {
+              try {
+                if (
+                  activeOrderId &&
+                  activeOrder &&
+                  (activeOrder.lines?.length || 0) === 0 &&
+                  !(activeOrder as any).tableId && !(activeOrder as any).table &&
+                  !activeOrder.customer &&
+                  (activeOrder.status || "OPEN") === "OPEN"
+                ) {
+                  await apiDeleteOrder(activeOrderId);
+                  clearActiveOrder();
+                  setActiveOrder(null);
+                  clearCurrentOrder();
+                }
+              } catch {}
+              navigate("/tables");
+            } else {
+              navigate(`/tables?pickForOrder=draft&returnTo=/pos`);
+            }
+          }}
+        >
+          Tafel
         </button>
+
+        <button
+          className="bar-btn"
+          onClick={async () => {
+            try {
+              if (activeOrderId) {
+                const updated = await apiUpdateOrder(activeOrderId, { orderType: "TAKEAWAY" });
+                setActiveOrder(updated);
+                navigate(`/orders/${activeOrderId}`);
+                return;
+              }
+              setDraftContext((prev) => ({ ...prev, orderType: "TAKEAWAY" }));
+            } catch {}
+          }}
+        >Afhaal</button>
 
         <button className="bar-btn" onClick={() => navigate("/kds")}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -602,7 +724,11 @@ export function App() {
             )}
           </span>
         </button>
+
+        <button className="bar-btn" onClick={() => setMoreOpen(true)}>Meer</button>
       </div>
+  {/* More actions sheet */}
+  <MoreActionsSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
 
       {/* Modifiers bottom sheet */}
       {sheetProduct && (
@@ -625,7 +751,23 @@ export function App() {
         />
       )}
 
-      {/* Customer modal mounted at POS-level */}
+      {/* Boeken bottom sheet */}
+      <BoekenSheet
+        open={boekenOpen}
+        onClose={() => setBoekenOpen(false)}
+        ensureRealOrderIfNeeded={ensureRealOrderIfNeeded}
+        onSetDraftContext={(ctx) => setDraftContext((prev) => ({ ...prev, ...ctx }))}
+      />
+
+      {/* Handle picker return via URL params */}
+      {/* Persist table/customer selection and navigate to Bon Detail */}
+      {(() => {
+        // useEffect cannot be placed inline; emulate by reading location.search inside component body is not ideal.
+        // We'll attach a dedicated effect below.
+        return null;
+      })()}
+
+      {/* Customer modal (still available for name booking via Customers hub) */}
       {activeOrderId && (
         <CustomerModal
           open={customerModalOpen}
@@ -633,9 +775,12 @@ export function App() {
           customer={activeOrder?.customer}
           onClose={() => setCustomerModalOpen(false)}
           onOrderUpdated={(updated) => {
-            console.log("[App] setActiveOrder, order.customer:", updated?.customer);
             setActiveOrder(updated);
             syncLocalStoreFromOrder(updated);
+            if (bookingIntent && updated?.id) {
+              setBookingIntent(false);
+              navigate(`/orders/${updated.id}`);
+            }
           }}
         />
       )}

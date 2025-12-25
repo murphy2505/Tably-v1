@@ -115,3 +115,9 @@ export async function apiUnlinkCustomerFromOrder(orderId: string): Promise<Order
   const res = await http.delete<{ order: OrderDTO }>(`orders/${orderId}/customer`);
   return res.data.order;
 }
+
+// Update order context (e.g., orderType)
+export async function apiUpdateOrder(orderId: string, patch: Partial<{ orderType: string; tableId: string | null; customerId: string | null }>): Promise<OrderDTO> {
+  const res = await http.put<{ order: OrderDTO }>(`/core/orders/${orderId}`, patch as any);
+  return res.data.order;
+}

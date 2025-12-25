@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { apiGetFloorplan, apiListTables, apiOpenOrAssignOrderToTable, type TableDTO } from "../api/pos/tables";
 import { usePosSession } from "../stores/posSessionStore";
 
 export default function PosTablesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { activeOrderId, setActiveOrderId } = usePosSession();
   const [tables, setTables] = useState<TableDTO[]>([]);
   const [layout, setLayout] = useState<any[]>([]);
@@ -40,6 +41,13 @@ export default function PosTablesPage() {
 
   async function handleClickTable(t: TableDTO) {
     try {
+      const params = new URLSearchParams(location.search);
+      const pickForOrder = params.get("pickForOrder");
+      const returnTo = params.get("returnTo") || "/pos";
+      if (pickForOrder) {
+        navigate(`${returnTo}?pickForOrder=${encodeURIComponent(pickForOrder)}&pickedTableId=${encodeURIComponent(t.id)}`, { replace: true });
+        return;
+      }
       if (t.openOrderId) {
         setActiveOrderId(t.openOrderId);
         navigate("/pos");
